@@ -13,11 +13,11 @@ To simplify the hardware setup a bit, I created a 3D printable insert with which
 The STL files are available [here](https://nerdiy.de/en/product-2/eink-frame-insert-suitable-for-ikea-ribba-5x7-picture-frame-3d-printable-stl-files/).
 
 
-![](https://github.com/Nerdiyde/ESPHomeSnippets/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/1.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/2.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/3.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/4.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/5.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/1.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/2.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/3.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/4.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/5.png)
 
 ### Trademarks
 
