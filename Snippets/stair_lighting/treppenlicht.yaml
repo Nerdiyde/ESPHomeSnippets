@@ -1,0 +1,883 @@
+esphome:
+  name: treppenlicht
+  friendly_name: TreppenLicht
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret treppenlicht_api_key
+
+ota:
+  password: !secret treppenlicht_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Treppenlicht Fallback Hotspot"
+    password: !secret treppenlicht_ap_password
+
+web_server:
+  port: 80
+  auth:
+    username: !secret treppenlicht_web_server_user
+    password: !secret treppenlicht_web_server_password
+  
+captive_portal:
+    
+
+# Example configuration entry
+esp32_touch:
+  setup_mode: False
+
+number:
+  - platform: template
+    name: Animation Auto Off Delay
+    id: animation_auto_off_delay # in ms
+    max_value: 60000
+    min_value: 1000
+    step: 1
+    unit_of_measurement: "ms"
+    optimistic: true
+    restore_value: true
+    initial_value: 15000
+    mode: box
+    icon: mdi:clock-time-three-outline
+
+  - platform: template
+    name: Step Animation Delay
+    id: step_animation_delay # in ms
+    max_value: 1000
+    min_value: 1
+    step: 1
+    unit_of_measurement: "ms"
+    optimistic: true
+    restore_value: true
+    initial_value: 200
+    mode: box
+    icon: mdi:clock-time-three-outline
+
+  - platform: template
+    name: Helligkeit gedimmt
+    id: dimmed_light_brightness
+    max_value: 1.0
+    min_value: 0.1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    initial_value: 0.4
+    mode: box
+    icon: mdi:brightness-6
+
+  - platform: template
+    name: Helligkeit Tagsüber
+    id: day_light_brightness
+    max_value: 1.0
+    min_value: 0.1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:brightness-6
+
+  - platform: template
+    name: Helligkeit bewohner schlafen
+    id: sleep_light_brightness
+    max_value: 1.0
+    min_value: 0.1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    initial_value: 0.4
+    mode: box
+    icon: mdi:brightness-6
+
+  - platform: template
+    name: Farbe Tagsüber Rotanteil
+    id: day_light_color_r
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Tagsüber Grünanteil
+    id: day_light_color_g
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Tagsüber Blauanteil
+    id: day_light_color_b
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Nachts Rotanteil
+    id: night_light_color_r
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Nachts Grünanteil
+    id: night_light_color_g
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Nachts Blauanteil
+    id: night_light_color_b
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Bewohner schlafen Rotanteil
+    id: sleep_light_color_r
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Bewohner schlafen Grünanteil
+    id: sleep_light_color_g
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+  - platform: template
+    name: Farbe Bewohner schlafen Blauanteil
+    id: sleep_light_color_b
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:palette
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime Sensor
+    
+  - platform: homeassistant
+    id: nachtabsenkung_beginn_hour
+    entity_id: input_datetime.heizung_nachtabsenkung_beginn
+    attribute: hour
+
+  - platform: homeassistant
+    id: nachtabsenkung_beginn_minute
+    entity_id: input_datetime.heizung_nachtabsenkung_beginn
+    attribute: minute
+
+  - platform: homeassistant
+    id: nachtabsenkung_ende_hour
+    entity_id: input_datetime.heizung_nachtabsenkung_ende
+    attribute: hour
+
+  - platform: homeassistant
+    id: nachtabsenkung_ende_minute
+    entity_id: input_datetime.heizung_nachtabsenkung_ende
+    attribute: minute  
+
+binary_sensor:
+  - platform: homeassistant
+    id: bewohner_schlafen
+    entity_id: input_boolean.bewohner_schlafen  
+    
+  - platform: esp32_touch
+    name: "TreppenLicht Touch Sensor Oben"
+    pin: GPIO33
+    threshold: 50
+    id: touch_top
+    on_press:
+      then:
+        - script.execute: 
+            id: play_animation_from_top
+
+  - platform: esp32_touch
+    name: "TreppenLicht Touch Sensor Unten"
+    pin: GPIO14
+    threshold: 30
+    id: touch_bottom
+    on_press:
+      then:
+        - script.execute: 
+            id: play_animation_from_bottom
+
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_OFF
+    id: light_1
+    type: RGB
+    variant: WS2812
+    pin: GPIO17
+    num_leds: 192
+    name: "TreppenLicht RGB"
+    power_supply: 'power_supply_switch'
+    internal: true
+
+  - platform: partition
+    name: "Alles"
+    id: all
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 0
+        to: 191
+    effects:
+      - random:
+      - pulse:
+      - strobe:
+      - flicker:
+      - addressable_rainbow:
+      - addressable_color_wipe:
+      - addressable_scan:
+      - addressable_twinkle:
+      - addressable_random_twinkle:
+      - addressable_fireworks:
+      - addressable_flicker:
+        
+  - platform: partition
+    name: "Licht Stufe 12" #von unten
+    id: step_12
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 0
+        to: 15
+  - platform: partition
+    name: "Licht Stufe 11" #von unten
+    id: step_11
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 16
+        to: 31
+  - platform: partition
+    name: "Licht Stufe 10" #von unten
+    id: step_10
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 32
+        to: 47
+  - platform: partition
+    name: "Licht Stufe 9" #von unten
+    id: step_9
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 48
+        to: 63
+  - platform: partition
+    name: "Licht Stufe 8" #von unten
+    id: step_8
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 64
+        to: 79
+  - platform: partition
+    name: "Licht Stufe 7" #von unten
+    id: step_7
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 80
+        to: 95
+  - platform: partition
+    name: "Licht Stufe 6" #von unten
+    id: step_6
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 96
+        to: 111
+  - platform: partition
+    name: "Licht Stufe 5" #von unten
+    id: step_5
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 112
+        to: 127
+  - platform: partition
+    name: "Licht Stufe 4" #von unten
+    id: step_4
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 128
+        to: 143
+  - platform: partition
+    name: "Licht Stufe 3" #von unten
+    id: step_3
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 144
+        to: 159
+  - platform: partition
+    name: "Licht Stufe 2" #von unten
+    id: step_2
+    default_transition_length: 1s
+    segments:
+      - id: light_1
+        from: 160
+        to: 175
+  - platform: partition
+    name: "Licht Stufe 1" #von unten
+    id: step_1
+    default_transition_length: 1s
+    segments:
+      # Use first 10 LEDs from the light with ID light1
+      - id: light_1
+        from: 176
+        to: 191
+
+power_supply:
+  - id: 'power_supply_switch'
+    pin: 21
+    keep_on_time: 5s
+    enable_time: 100ms
+
+script:
+  - id: show_stairs_animation
+    parameters:
+      anim_direction_up: boolean
+      light_state: boolean
+      step_delay_ms: int
+      color_r: float
+      color_g: float
+      color_b: float
+      brightness: float
+    then:
+      if:
+        condition: 
+          lambda: return anim_direction_up;
+        then:
+        - light.control:
+            id: step_1
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_2
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_3
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_4
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_5
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_6
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_7
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_8
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_9
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_10
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_11
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_12
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        else:
+        - light.control:
+            id: step_12
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_11
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_10
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_9
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_8
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_7
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_6
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_5
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_4
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_3
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_2
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+        - delay: !lambda return step_delay_ms;
+        - light.control:
+            id: step_1
+            state: !lambda return light_state;
+            brightness: !lambda return brightness;
+            red: !lambda return color_r;
+            green: !lambda return color_g;
+            blue: !lambda return color_b;
+
+  - id: turn_on_from_bottom
+    parameters:
+      r: float
+      g: float
+      b: float
+      br: float
+    then:
+      - script.execute:
+          id: show_stairs_animation
+          anim_direction_up: true # animation direction from bottom to top
+          light_state: true # shut on
+          step_delay_ms: !lambda return id(step_animation_delay).state;
+          color_r: !lambda return r;
+          color_g: !lambda return g;
+          color_b: !lambda return b;
+          brightness: !lambda return br;
+
+  - id: turn_off_from_bottom
+    parameters:
+      r: float
+      g: float
+      b: float
+      br: float
+    then:
+      - script.execute:
+          id: show_stairs_animation
+          anim_direction_up: true # animation direction from bottom to top
+          light_state: false # shut off
+          step_delay_ms: !lambda return id(step_animation_delay).state;
+          color_r: !lambda return r;
+          color_g: !lambda return g;
+          color_b: !lambda return b;
+          brightness: !lambda return br;
+
+  - id: turn_on_from_top
+    parameters:
+      r: float
+      g: float
+      b: float
+      br: float
+    then:
+      - script.execute:
+          id: show_stairs_animation
+          anim_direction_up: false # animation direction from top to bottom
+          light_state: true # shut on
+          step_delay_ms: !lambda return id(step_animation_delay).state;
+          color_r: !lambda return r;
+          color_g: !lambda return g;
+          color_b: !lambda return b;
+          brightness: !lambda return br;
+
+  - id: turn_off_from_top
+    parameters:
+      r: float
+      g: float
+      b: float
+      br: float
+    then:
+      - script.execute:
+          id: show_stairs_animation
+          anim_direction_up: false # animation direction from top to bottom
+          light_state: false # shut off
+          step_delay_ms: !lambda return id(step_animation_delay).state;
+          color_r: !lambda return r;
+          color_g: !lambda return g;
+          color_b: !lambda return b;
+          brightness: !lambda return br;
+
+  - id: play_animation_from_bottom
+    then:
+      - if:
+          condition:
+            binary_sensor.is_on: bewohner_schlafen
+          then:
+            - script.execute: 
+                id: turn_on_from_bottom
+                r: !lambda return id(sleep_light_color_r).state/255.0;
+                g: !lambda return id(sleep_light_color_g).state/255.0;
+                b: !lambda return id(sleep_light_color_b).state/255.0;
+                br: !lambda return id(sleep_light_brightness).state;
+            - delay: !lambda return id(animation_auto_off_delay).state;
+            - script.execute: 
+                id: turn_off_from_bottom
+                r: !lambda return id(sleep_light_color_r).state/255.0;
+                g: !lambda return id(sleep_light_color_g).state/255.0;
+                b: !lambda return id(sleep_light_color_b).state/255.0;
+                br: !lambda return id(sleep_light_brightness).state;        
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    return ((id(homeassistant_time).now().hour >= id(nachtabsenkung_beginn_hour).state) && id(homeassistant_time).now().minute >= id(nachtabsenkung_beginn_minute).state) || 
+                    ((id(homeassistant_time).now().hour <= id(nachtabsenkung_ende_hour).state) && (id(homeassistant_time).now().minute <= id(nachtabsenkung_ende_minute).state));
+                then:
+                  - script.execute: 
+                      id: turn_on_from_bottom
+                      r: !lambda return id(night_light_color_r).state/255.0;
+                      g: !lambda return id(night_light_color_g).state/255.0;
+                      b: !lambda return id(night_light_color_b).state/255.0;
+                      br: !lambda return id(dimmed_light_brightness).state;
+                  - delay: !lambda return id(animation_auto_off_delay).state;
+                  - script.execute: 
+                      id: turn_off_from_bottom
+                      r: !lambda return id(night_light_color_r).state/255.0;
+                      g: !lambda return id(night_light_color_g).state/255.0;
+                      b: !lambda return id(night_light_color_b).state/255.0;
+                      br: !lambda return id(dimmed_light_brightness).state;
+                else:
+                  - script.execute: 
+                      id: turn_on_from_bottom
+                      r: !lambda return id(day_light_color_r).state/255.0;
+                      g: !lambda return id(day_light_color_g).state/255.0;
+                      b: !lambda return id(day_light_color_b).state/255.0;
+                      br: !lambda return id(day_light_brightness).state;
+                  - delay: !lambda return id(animation_auto_off_delay).state;
+                  - script.execute: 
+                      id: turn_off_from_bottom
+                      r: !lambda return id(day_light_color_r).state/255.0;
+                      g: !lambda return id(day_light_color_g).state/255.0;
+                      b: !lambda return id(day_light_color_b).state/255.0;
+                      br: !lambda return id(day_light_brightness).state;
+
+  - id: play_animation_from_top
+    then:
+      - if:
+          condition:
+            binary_sensor.is_on: bewohner_schlafen
+          then:
+            - script.execute: 
+                id: turn_on_from_top
+                r: !lambda return id(sleep_light_color_r).state/255.0;
+                g: !lambda return id(sleep_light_color_g).state/255.0;
+                b: !lambda return id(sleep_light_color_b).state/255.0;
+                br: !lambda return id(sleep_light_brightness).state;
+            - delay: !lambda return id(animation_auto_off_delay).state;
+            - script.execute: 
+                id: turn_off_from_top
+                r: !lambda return id(sleep_light_color_r).state/255.0;
+                g: !lambda return id(sleep_light_color_g).state/255.0;
+                b: !lambda return id(sleep_light_color_b).state/255.0;
+                br: !lambda return id(sleep_light_brightness).state;        
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    return ((id(homeassistant_time).now().hour >= id(nachtabsenkung_beginn_hour).state) && id(homeassistant_time).now().minute >= id(nachtabsenkung_beginn_minute).state) || 
+                    ((id(homeassistant_time).now().hour <= id(nachtabsenkung_ende_hour).state) && (id(homeassistant_time).now().minute <= id(nachtabsenkung_ende_minute).state));
+                then:
+                  - script.execute: 
+                      id: turn_on_from_top
+                      r: !lambda return id(night_light_color_r).state/255.0;
+                      g: !lambda return id(night_light_color_g).state/255.0;
+                      b: !lambda return id(night_light_color_b).state/255.0;
+                      br: !lambda return id(dimmed_light_brightness).state;
+                  - delay: !lambda return id(animation_auto_off_delay).state;
+                  - script.execute: 
+                      id: turn_off_from_top
+                      r: !lambda return id(night_light_color_r).state/255.0;
+                      g: !lambda return id(night_light_color_g).state/255.0;
+                      b: !lambda return id(night_light_color_b).state/255.0;
+                      br: !lambda return id(dimmed_light_brightness).state;
+                else:
+                  - script.execute: 
+                      id: turn_on_from_top
+                      r: !lambda return id(day_light_color_r).state/255.0;
+                      g: !lambda return id(day_light_color_g).state/255.0;
+                      b: !lambda return id(day_light_color_b).state/255.0;
+                      br: !lambda return id(day_light_brightness).state;
+                  - delay: !lambda return id(animation_auto_off_delay).state;
+                  - script.execute: 
+                      id: turn_off_from_top
+                      r: !lambda return id(day_light_color_r).state/255.0;
+                      g: !lambda return id(day_light_color_g).state/255.0;
+                      b: !lambda return id(day_light_color_b).state/255.0;
+                      br: !lambda return id(day_light_brightness).state;
+
+button:
+  - platform: restart
+    name: "Restart ESP"
+
+  - platform: template
+    name: Unten Ein
+    id: trigger_on_from_bottom
+    on_press:
+      then:
+        - script.execute: 
+            id: turn_on_from_bottom
+            r: !lambda return (255.0/255.0)*1.0;
+            g: !lambda return (231.0/255.0)*1.0;
+            b: !lambda return (159.0/255.0)*1.0;
+            br: !lambda return id(day_light_brightness).state;
+
+  - platform: template
+    name: Unten Aus
+    id: trigger_off_from_bottom
+    on_press:
+      then:
+        - script.execute: 
+            id: turn_off_from_bottom
+            r: !lambda return (255.0/255.0)*1.0;
+            g: !lambda return (231.0/255.0)*1.0;
+            b: !lambda return (159.0/255.0)*1.0;
+            br: !lambda return id(day_light_brightness).state;
+
+  - platform: template
+    name: Oben Ein
+    id: trigger_on_from_top
+    on_press:
+      then:
+        - script.execute: 
+            id: turn_on_from_top
+            r: !lambda return (255.0/255.0)*1.0;
+            g: !lambda return (231.0/255.0)*1.0;
+            b: !lambda return (159.0/255.0)*1.0;
+            br: !lambda return id(day_light_brightness).state;
+
+  - platform: template
+    name: Oben Aus
+    id: trigger_off_from_top
+    on_press:
+      then:
+        - script.execute: 
+            id: turn_off_from_top
+            r: !lambda return (255.0/255.0)*1.0;
+            g: !lambda return (231.0/255.0)*1.0;
+            b: !lambda return (159.0/255.0)*1.0;
+            br: !lambda return id(day_light_brightness).state;
+
+  - platform: template
+    name: Animation von Unten
+    id: trigger_animation_from_bottom
+    on_press:
+      then:
+        - script.execute: 
+            id: play_animation_from_bottom
+
+  - platform: template
+    name: Animation von Oben
+    id: trigger_animation_from_top
+    on_press:
+      then:
+        - script.execute: 
+            id: play_animation_from_top
