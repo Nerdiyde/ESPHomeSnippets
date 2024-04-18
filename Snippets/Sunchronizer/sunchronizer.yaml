@@ -1,0 +1,1102 @@
+esphome:
+  name: sunchronizer-1axis-driver-dev1
+  friendly_name: Sunchronizer_1axis_driver_dev1
+
+  on_boot:
+    priority: -100
+    then:
+        # this is done to releod the previous setting of the rotation select component
+      - lambda: |-
+          auto call = id(display_rotation_select).make_call();
+          switch (id(global_display_rotation)) {
+            case DISPLAY_ROTATION_0_DEGREES: 
+              call.set_option("0°");
+              call.perform();
+              break;
+            case DISPLAY_ROTATION_90_DEGREES: 
+              call.set_option("90°");
+              call.perform();
+              break;
+            case DISPLAY_ROTATION_180_DEGREES: 
+              call.set_option("180°");
+              call.perform();
+              break;     
+            case DISPLAY_ROTATION_270_DEGREES: 
+              call.set_option("270°");
+              call.perform();
+              break;       
+            default:
+              call.set_option("0°");
+              call.perform();
+          }
+
+esp32:
+  board: esp32dev
+    
+uart:
+  rx_pin: GPIO23
+  baud_rate: 9600
+          
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+  id: i2c_main
+
+# Enable logging
+logger:
+  level: INFO
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret Sunchronizer_S1_api_key
+
+ota:
+  password: !secret Sunchronizer_S1_ota_password
+
+wifi:
+  power_save_mode: none
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Sunchronizer-1Axis-Driver-Dev1"
+    password: !secret Sunchronizer_S1_ap_password
+
+captive_portal:
+    
+web_server:
+  port: 80
+  auth:
+    username: !secret Sunchronizer_S1_web_server_user
+    password: !secret Sunchronizer_S1_web_server_password
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+  - platform: gps
+    id: gnss_time  
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: Connected SSID
+    bssid:
+      name: Connected BSSID
+    mac_address:
+      name: Mac Wifi Address
+    scan_results:
+      name: Latest WiFi Scan Results
+
+  - platform: template
+    name: "Error"
+    id: error_text
+    icon: "mdi:alert-circle"
+    lambda: |-
+      return {"None"};
+    update_interval: 60s
+
+gps:
+  id: gnss_receiver
+  latitude:
+    name: "GNSS Latitude"
+    id: gnss_latitude
+    icon: "mdi:crosshairs-gps"
+    disabled_by_default: true
+    on_value_range:
+      - above: 0.0
+        then:
+          lambda: |-
+            //if (id(auto_set_gnss_coordinates_to_device_coordinates).state)
+            if (id(auto_set_gnss_coordinates_to_device_coordinates).state and id(gnss_position_valid).state)
+            {
+              auto call = id(device_latitude).make_call();
+              call.set_value(x);
+              call.perform();
+            }
+  longitude:
+    name: "GNSS Longitude"
+    id: gnss_longitude
+    icon: "mdi:crosshairs-gps"
+    disabled_by_default: true
+    on_value_range:
+      - above: 0.0
+        then:
+          lambda: |-
+            //if (id(auto_set_gnss_coordinates_to_device_coordinates).state)
+            if (id(auto_set_gnss_coordinates_to_device_coordinates).state and id(gnss_position_valid).state)
+            {
+              auto call = id(device_longitude).make_call();
+              call.set_value(x);
+              call.perform();
+            }
+  altitude:
+    name: "GNSS Altitude"
+    id: gnss_altitude
+    disabled_by_default: true
+  satellites:
+    name: "GNSS Satelites"
+    id: gnss_satelites
+    icon: "mdi:satellite-variant"
+    disabled_by_default: true
+
+sun:
+  id: sun_data
+  latitude: 51.4818445°
+  longitude: 7.2162363°
+
+interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(auto_adjust_angle).state)
+          {
+            id(perform_automatic_angle_adjustment).execute();
+          }
+
+          id(perform_panel_blocked_check).execute();
+
+  - interval: 5s
+    then:
+      - lambda: |-
+          if (id(auto_set_panel_elev_target_to_sun_elev).state or id(sleep_mode_active).state)
+          {
+            id(perform_automatic_sun_elevation_angle_setting).execute();
+          }
+
+button:
+  - platform: restart
+    name: "Restart ESP"
+
+  - platform: template
+    name: "Start elev angle measurement"
+    id: start_elev_angle_measurement
+    on_press:
+      then:
+        - script.execute: 
+            id: perform_automatic_elev_angle_boundaries_measurement  
+
+  - platform: template
+    name: "Boom up"
+    id: button_up_frontend
+    icon: "mdi:arrow-expand-up"
+    on_press:
+      then:
+        - script.execute: start_boom_lifting
+
+  - platform: template
+    name: "Boom Down"
+    id: button_down_frontend
+    icon: "mdi:arrow-expand-down"
+    on_press:
+      then:
+        - script.execute: start_boom_lowering
+
+  - platform: template
+    name: "Boom Stop"
+    id: button_stop_frontend
+    icon: "mdi:stop-circle-outline"
+    on_press:
+      then:
+        - script.execute: stop_boom_movement
+
+switch:
+  - platform: template
+    name: "Display On/Off"
+    id: display_on_off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF 
+
+  - platform: template
+    name: "Sleep Mode Active"
+    id: sleep_mode_active
+    icon: "mdi:sleep"
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - switch.turn_on: auto_adjust_angle
+      - lambda: |-
+          id(perform_automatic_sun_elevation_angle_setting).execute();          
+    turn_off_action:
+      - lambda: |-
+          if (id(auto_set_panel_elev_target_to_sun_elev).state)
+          {
+            id(perform_automatic_sun_elevation_angle_setting).execute();
+          }
+
+  - platform: template
+    name: "Auto angle adjust"
+    id: auto_adjust_angle
+    icon: "mdi:angle-acute"
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_OFF 
+    turn_off_action:
+      - cover.stop: panel_lift
+
+  - platform: template
+    name: "Auto set elevation angle"
+    id: auto_set_panel_elev_target_to_sun_elev
+    icon: "mdi:sun-angle-outline"
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON 
+    turn_on_action:
+      - lambda: |-
+          if (id(auto_set_panel_elev_target_to_sun_elev).state)
+          {
+            id(perform_automatic_sun_elevation_angle_setting).execute();
+          }
+
+  - platform: template
+    name: "Auto device coordinates retrieval"
+    id: auto_set_gnss_coordinates_to_device_coordinates
+    icon: "mdi:longitude"
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON 
+
+number:
+  - platform: template
+    name: "Panel target elevation angle"
+    id: panel_elev_target_angle
+    max_value: 90
+    min_value: 0
+    step: 0.1
+    unit_of_measurement: "°"
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Panel elevation target angle tolerance"
+    id: panel_elev_target_angle_tolerance
+    max_value: 20
+    min_value: 1
+    initial_value: 2
+    step: 0.1
+    unit_of_measurement: "°"
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Panel azimuth orientation"  # The compass direction the panel is pointing to
+    id: panel_azimuth_orientation
+    max_value: 359.9
+    min_value: 0
+    step: 0.1
+    initial_value: 180.0
+    unit_of_measurement: "°"
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Latitude"
+    id: device_latitude
+    max_value: 90.0
+    min_value: -90.0
+    step: 0.000001
+    unit_of_measurement: "°"
+    optimistic: true
+    restore_value: true
+    mode: box
+    on_value:
+      then:
+        - lambda: |-
+            id(sun_data).set_latitude(x);
+
+  - platform: template
+    name: "Longitude"
+    id: device_longitude
+    max_value: 360.0
+    min_value: 0.0
+    step: 0.000001
+    unit_of_measurement: "°"
+    optimistic: true
+    restore_value: true
+    mode: box
+    on_value:
+      then:
+        - lambda: |-
+            id(sun_data).set_longitude(x);
+
+select:
+  - platform: template
+    name: "Elevation axis mode"
+    id: elevation_axis_mode
+    icon: "mdi:elevator"
+    options:
+      - "Sun elevation & azimuth based (1 axis mode)"
+      - "Sun elevation based (2 axis mode)"
+    optimistic: true
+
+  - platform: template
+    name: "Display rotation"
+    id: display_rotation_select
+    options:
+      - 0°
+      - 180°
+    initial_option: 0°
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+             format: "Chosen option: %s "
+             args: ["x.c_str()"]
+        - lambda: |-   
+            auto index = id(display_rotation_select).active_index();     
+            ESP_LOGI("main", "Option at index %d is active", index.value());  
+            if (index.value() == 0)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_0_DEGREES;
+              id(display1).set_rotation(DISPLAY_ROTATION_0_DEGREES);
+              ESP_LOGD("lambda", "Set rotation to 0°");
+            } else if (index.value() == 1)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_180_DEGREES;
+              id(display1).set_rotation(DISPLAY_ROTATION_180_DEGREES); 
+              ESP_LOGD("lambda", "Set rotation to 180°");             
+            } 
+        - component.update: display1
+
+sensor:
+  
+  - platform: sun
+    name: Sun Elevation
+    id: sun_elevation
+    type: elevation
+    disabled_by_default: true
+
+  - platform: sun
+    name: Sun Azimuth
+    id: sun_azimuth
+    type: azimuth
+    disabled_by_default: true
+
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+  - platform: bmi160
+    address: 0x69
+    id: panel_bmi160
+    update_interval: 200ms
+    acceleration_x:
+      name: "Panel Accel X"
+      id: "accel_panel_x"
+      disabled_by_default: true
+      filters:
+        - sliding_window_moving_average:
+            send_first_at: 2
+            window_size: 5
+            send_every: 2
+    acceleration_y:
+      name: "Panel Accel Y"
+      id: "accel_panel_y"
+      disabled_by_default: true
+      filters:
+        - sliding_window_moving_average:
+            send_first_at: 2
+            window_size: 5
+            send_every: 2
+    acceleration_z:
+      name: "Panel Accel z"
+      id: "accel_panel_z"
+      disabled_by_default: true
+      filters:
+        - sliding_window_moving_average:
+            send_first_at: 2
+            window_size: 5
+            send_every: 2
+    gyroscope_x:
+      name: "Panel Gyro X"
+      disabled_by_default: true
+    gyroscope_y:
+      name: "Panel Gyro Y"
+      disabled_by_default: true
+    gyroscope_z:
+      name: "Panel Gyro z"
+      disabled_by_default: true
+    temperature:
+      name: "Panel Temperature"
+
+  - platform: template
+    name: "Overall panel acceleration"
+    id: overall_panel_acceleration
+    unit_of_measurement: "m/s²"
+    accuracy_decimals: 2
+    internal: true
+    update_interval: 1s
+    lambda: |-
+        float x = id(accel_panel_x).state;
+        float y = id(accel_panel_y).state;
+        float z = id(accel_panel_z).state;
+        float total_acceleration = sqrt(x * x + y * y + z * z);
+        return total_acceleration;     
+
+  - platform: template
+    id: panel_elevation_angle_sensor
+    icon: "mdi:angle-acute"
+    internal: true
+    unit_of_measurement: "°"
+    accuracy_decimals: 1
+    update_interval: 1s
+    lambda: |-
+        double result = asin((-1*id(accel_panel_y).state) / id(overall_panel_acceleration).state);
+        double result_in_degrees = (result * 180.0 / M_PI); //+ id(elevation_calibration_offset).state;
+        return result_in_degrees; 
+
+  - platform: template
+    name: "Panel elevation angle"
+    id: panel_angle_display
+    unit_of_measurement: "°"
+    accuracy_decimals: 1
+    update_interval: 60s
+    lambda: |-
+        return id(panel_elevation_angle_sensor).state; 
+
+  - platform: template
+    name: "Panel elevation angle dev"   # this sensor can be activated for dev reasons. It updates faster.
+    id: panel_angle_display_dev
+    unit_of_measurement: "°"
+    accuracy_decimals: 1
+    update_interval: 2s
+    disabled_by_default: true
+    lambda: |-
+        return id(panel_elevation_angle_sensor).state; 
+
+  - platform: ina219
+    address: 0x40
+    shunt_resistance: 0.1 ohm
+    id: motor_electrical_sensor
+    current:
+      name: "Motor supply current"
+      id: motor_supply_current
+      disabled_by_default: true
+    power:
+      name: "Motor supply Power"
+      disabled_by_default: true
+    bus_voltage: 
+      name: "Motor supply voltage"
+      id: motor_supply_voltage
+      disabled_by_default: true
+    shunt_voltage:
+      name: "Motor supply Shunt Voltage"
+      disabled_by_default: true
+    max_voltage: 15.0V
+    max_current: 3.0A
+    update_interval: 250ms
+
+  - platform: template
+    name: "Close current sensor"
+    id: close_current_sensor
+    accuracy_decimals: 2
+    internal: true
+    update_interval: 250ms
+    lambda: |-
+      return id(panel_elevation_angle_sensor).state >= 15 ? id(motor_supply_current).state : 0 ;
+
+  - platform: template
+    name: "Panel measured elev angle max"
+    id: panel_measured_elev_angle_max
+    icon: "mdi:angle-acute"
+    unit_of_measurement: "°"
+    accuracy_decimals: 1
+    disabled_by_default: true
+    lambda: |-
+      return id(panel_elev_angle_max);  
+
+  - platform: template
+    name: "Panel measured elev angle min"
+    id: panel_measured_elev_angle_min
+    icon: "mdi:angle-acute"
+    unit_of_measurement: "°"
+    accuracy_decimals: 1
+    disabled_by_default: true
+    lambda: |-
+      return id(panel_elev_angle_min);
+
+output:
+  - platform: gpio
+    pin: GPIO18
+    id: motor1_forward_pin
+    inverted: true
+
+  - platform: gpio
+    pin: GPIO19
+    id: motor1_reverse_pin
+    inverted: true
+
+#  - platform: ledc
+#    id: motor1_forward_pin
+#    pin: GPIO18
+#    frequency: 1000
+
+#  - platform: ledc
+#    id: motor1_reverse_pin
+#    pin: GPIO19
+#    frequency: 1000
+
+  - platform: ledc
+    id: motor2_forward_pin
+    pin: GPIO27
+    frequency: 1000
+
+  - platform: ledc
+    id: motor2_reverse_pin
+    pin: GPIO25
+    frequency: 1000
+
+binary_sensor:
+
+  - platform: template
+    name: "GNSS position valid"
+    id: gnss_position_valid
+    icon: "mdi:crosshairs-question"
+    disabled_by_default: true
+    lambda: |-
+      return (id(gnss_satelites).state >= id(gnss_min_required_sat_count));
+
+  - platform: template
+    name: "Motor voltage is valid"
+    id: motor_voltage_is_valid
+    disabled_by_default: true
+    lambda: |-
+      return (id(motor_supply_voltage).state >= (id(motor_nominal_supply_voltage) - id(motor_supply_voltage_tolerance)) and id(motor_supply_voltage).state <= (id(motor_nominal_supply_voltage) + id(motor_supply_voltage_tolerance)));
+
+  - platform: template
+    name: "Panel is in sleep Position"
+    id: panel_is_in_sleep_position
+    icon: "mdi:sleep"
+    lambda: |-
+      return (abs(id(panel_elev_angle_min) - id(panel_angle_display).state) <= id(panel_elev_sleep_angle_tolerance));
+
+  - platform: template
+    name: "Motor is in blocked state"
+    id: motor_is_blocked_binary_sensor
+    icon: "mdi:block-helper"
+    disabled_by_default: true
+    lambda: |-
+      return (id(motor_supply_current).state >= id(motor_current_blocked));
+
+  - platform: template
+    name: "Motor is in running state"
+    id: motor_is_running_binary_sensor
+    disabled_by_default: true
+    lambda: |-
+      return (id(panel_lift).current_operation == CoverOperation::COVER_OPERATION_OPENING or id(panel_lift).current_operation == CoverOperation::COVER_OPERATION_CLOSING);
+
+  - platform: template
+    name: "Motor is in idle state"
+    id: motor_is_idle
+    icon: "mdi:sleep"
+    disabled_by_default: true
+    lambda: |-
+      return (id(motor_supply_current).state <= id(motor_current_idle));
+
+  - platform: template
+    name: "Endstop Top virtual"
+    id: top_virtual_endstop_binary_sensor
+    icon: "mdi:electric-switch"
+    disabled_by_default: true
+    lambda: |-
+      return (id(panel_elevation_angle_sensor).state >= id(panel_elev_angle_max));
+
+  - platform: template
+    name: "Endstop bottom virtual"
+    id: bottom_virtual_endstop_binary_sensor
+    icon: "mdi:electric-switch"
+    disabled_by_default: true
+    lambda: |-
+      return (id(panel_elevation_angle_sensor).state <= id(panel_elev_angle_min));
+
+  - platform: template
+    name: "Panel below elev target angle"
+    id: panel_below_elev_target_angle_binary_sensor
+    disabled_by_default: true
+    lambda: |-
+      return (id(panel_elev_target_angle).state > id(panel_elevation_angle_sensor).state);
+
+  - platform: template
+    name: "Panel above elev target angle"
+    id: panel_above_elev_target_angle_binary_sensor
+    disabled_by_default: true
+    lambda: |-
+      return (id(panel_elev_target_angle).state < id(panel_elevation_angle_sensor).state);
+
+  - platform: template
+    name: "Panel within elev target angle range"
+    id: panel_within_elev_target_angle_range_binary_sensor
+    disabled_by_default: true
+    lambda: |-
+      return (abs(id(panel_elev_target_angle).state - id(panel_elevation_angle_sensor).state) <= id(panel_elev_target_angle_tolerance).state);
+
+  - platform: gpio
+    name: "Button Up"
+    id: button_up_physical
+    icon: "mdi:arrow-expand-up"
+    disabled_by_default: true
+    pin:
+      number: GPIO16
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on: 10ms    
+    on_click:
+      - min_length: 50ms
+        max_length: 350ms
+        then:
+          - switch.turn_off: auto_adjust_angle
+          - script.execute: start_boom_lifting
+      - min_length: 500ms
+        max_length: 3000ms
+        then:
+          - script.execute: stop_boom_movement
+
+  - platform: gpio
+    name: "Button Down"
+    id: button_down_physical
+    icon: "mdi:arrow-expand-down"
+    disabled_by_default: true
+    pin:
+      number: GPIO17
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on: 10ms    
+    on_click:
+      - min_length: 50ms
+        max_length: 350ms
+        then:
+          - switch.turn_off: auto_adjust_angle
+          - script.execute: start_boom_lowering
+      - min_length: 500ms
+        max_length: 3000ms
+        then:
+          - script.execute: stop_boom_movement
+
+cover:
+  - platform: endstop
+    name: "Panel lift"
+    id: panel_lift
+    internal: true
+    open_action:
+        - output.turn_off: motor1_reverse_pin
+        - output.turn_on: motor1_forward_pin
+#        - output.set_level:
+#            id: motor1_forward_pin
+#            level: "100%"
+    open_duration: 1min
+    open_endstop: top_virtual_endstop_binary_sensor
+
+    close_action:
+        - output.turn_off: motor1_forward_pin
+        - output.turn_on: motor1_reverse_pin
+#        - output.set_level:
+#            id: motor1_reverse_pin
+#            level: "100%"
+    close_duration: 1min
+    close_endstop: bottom_virtual_endstop_binary_sensor
+
+    stop_action:
+        - output.turn_off: motor1_forward_pin
+        - output.turn_off: motor1_reverse_pin
+
+globals:
+  - id: global_display_rotation
+    type: esphome::display::DisplayRotation
+    restore_value: yes
+    initial_value: 'DISPLAY_ROTATION_0_DEGREES'
+
+  - id: motor_is_blocked_old_state  # used to estimate if the motor is blocked
+    type: bool
+    restore_value: no    
+    initial_value: 'false'
+
+  - id: panel_elevation_angle_sensor_old_state  # used to estimate if the boom is not moving when motor is moving
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+
+  - id: panel_moving_start_date  # used to save the date when a panel movement is initiated
+    type: int
+    restore_value: no
+    initial_value: '0'    
+
+  - id: panel_elev_angle_max  # this is the max allowed elevation angle
+    type: float
+    restore_value: yes
+    initial_value: '60'   # in °
+
+  - id: panel_elev_angle_min  # this is the minimum allowed elevation angle
+    type: float
+    restore_value: yes
+    initial_value: '16'   # in °
+
+  - id: sun_sleep_mode_angle  # if the sun elevation angle is below this value the panel is driven to sleep position
+    type: float
+    initial_value: '-3'   # in °
+
+  - id: motor_current_blocked
+    type: float
+    initial_value: '3.2'   # in A
+
+  - id: motor_current_idle
+    type: float
+    restore_value: yes
+    initial_value: '0.01'   # in A    
+
+  - id: gnss_min_required_sat_count  # this is the number of satelites that need to be available to consider the gnss lat/long as valid
+    type: int
+    initial_value: '5'
+
+  - id: panel_elev_sleep_angle_tolerance  # this is the tolerance for the panel to be considered in sleep mode range
+    type: float
+    initial_value: '2'   # in °
+
+  - id: motor_nominal_supply_voltage  # this is the nominal motor voltage
+    type: float
+    initial_value: '12'   # in V
+
+  - id: motor_supply_voltage_tolerance  # this is the max allowed deviation of the motor input voltage
+    type: float
+    initial_value: '3'   # in V 
+
+  - id: panel_block_detection_by_angle_active
+    type: boolean
+    initial_value: 'false'
+
+  - id: panel_block_detection_by_motor_current_active
+    type: boolean
+    initial_value: 'false'
+
+  - id: panel_block_detection_opening_angle_change_minimum  # smaller value = less sensitive
+    type: float
+    initial_value: '-1.5'   # in ° 
+
+  - id: panel_block_detection_closing_angle_change_minimum  # smaller value = less sensitive
+    type: float
+    initial_value: '0.5'   # in ° 
+
+  - id: screensaver_offset
+    type: int
+    initial_value: '0'
+   
+
+# checks if the angle differs from the target angle and drives it to target angle
+script:
+  - id: perform_automatic_angle_adjustment
+    mode: single
+    then:
+      - lambda: |-
+          id(panel_bmi160).update();
+          id(overall_panel_acceleration).update();
+          id(panel_elevation_angle_sensor).update();        
+
+          if (id(panel_within_elev_target_angle_range_binary_sensor).state)
+          {
+            id(stop_boom_movement).execute();            
+          } else if (id(panel_below_elev_target_angle_binary_sensor).state)
+          {
+            id(start_boom_lifting).execute();
+          } else if (id(panel_above_elev_target_angle_binary_sensor).state)
+          {
+            id(start_boom_lowering).execute();
+          } 
+
+  - id: perform_automatic_elev_angle_boundaries_measurement
+    mode: single
+    then:
+      - switch.turn_off: auto_adjust_angle
+      - lambda: |-
+
+          ESP_LOGE("Elevation angle measurement:", "Preparing evelation angle measrurement. \"Auto angle adjustment mode\" is deactivated...");
+
+          // Increase boundary values to avoid sw motor endstop before physical endstop of linear actuator motor is reached
+          id(panel_elev_angle_max) = 90;
+          id(panel_elev_angle_min) = -90;
+          
+          // Close panel lifter and wait until motor current is zero
+          id(start_boom_lowering).execute();
+
+          id(motor_electrical_sensor).update();
+
+          ESP_LOGE("Elevation angle measurement:", "Moving motor down and wait for motor idle state...");
+          
+      - delay: 1s
+      - while:
+          condition:
+            lambda: 'return id(motor_supply_current).state > id(motor_current_idle);'
+          then:
+          - lambda: ESP_LOGE("Elevation angle measurement:", ".");
+          - lambda: id(motor_electrical_sensor).update();
+          - delay: 1s
+
+      - lambda: |-
+          // Lets update the sensors first...
+          id(panel_bmi160).update();
+          id(overall_panel_acceleration).update();
+          id(panel_elevation_angle_sensor).update();  
+
+          // ...and then save the current angle as new boundary value
+          id(panel_elev_angle_min) = id(panel_elevation_angle_sensor).state;
+          ESP_LOGE("Elevation angle measurement:", "New panel elevation min value saved: %2.1f", id(panel_elev_angle_min));
+          
+          // Now open panel lifter and wait until motor current is zero to start the detection of the max angle
+          id(start_boom_lifting).execute();
+
+          id(motor_electrical_sensor).update();
+
+          ESP_LOGE("Elevation angle measurement:", "Moving motor up and wait for motor idle state...");
+          
+      - delay: 1s
+      - while:
+          condition:
+            lambda: 'return id(motor_supply_current).state > id(motor_current_idle);'
+          then:
+          - lambda: ESP_LOGE("Elevation angle measurement:", ".");
+          - lambda: id(motor_electrical_sensor).update();
+          - delay: 1s
+
+      - lambda: |-
+          // Lets update the sensors first...
+          id(panel_bmi160).update();
+          id(overall_panel_acceleration).update();
+          id(panel_elevation_angle_sensor).update();  
+
+          // ...and then save the current angle as new boundary value
+          id(panel_elev_angle_max) = id(panel_elevation_angle_sensor).state;
+          ESP_LOGE("Elevation angle measurement:", "New panel elevation max value saved: %2.1f", id(panel_elev_angle_max));
+
+  - id: perform_automatic_sun_elevation_angle_setting
+    mode: single
+    then:
+      - lambda: |-
+          // some constants first
+          float pi = 3.1415926535;
+          float deg2rad = pi/180.0;
+          float rad2deg = 180.0/pi;
+          
+          auto elevation_mode = id(elevation_axis_mode).active_index(); // 0 = 2 axis mode; 1 = 1 axis mode;     
+          
+          ESP_LOGE("Elevation angle estimation:", "Selected mode (ID: %1.0f) is %s.", elevation_mode, id(elevation_axis_mode).state.c_str());
+
+          float tmp_panel_elev_target_value = 90.0 - id(sun_elevation).state; // This is the setting for 2 axis mode ("Sun elevation based (2 axis mode)"")
+
+          if (elevation_mode==0) // This is the setting for 1 axis mode ("Sun elevation & azimuth based (1 axis mode)")
+          {
+            tmp_panel_elev_target_value = (asin(cos(id(sun_elevation).state * deg2rad) * cos(id(sun_azimuth).state * deg2rad - id(panel_azimuth_orientation).state * deg2rad))) * rad2deg;
+            // regarding tha above formula the infos here (and chatGPT) helped me a lot: https://community.home-assistant.io/t/ha-solar-tracker/571372
+
+            ESP_LOGE("Elevation mode:", "Sun elevation & azimuth based = 1 axis mode is used.");
+          } else
+          {
+            ESP_LOGE("Elevation mode:", "Sun elevation based = 2 axis mode is used.");
+          }
+
+          ESP_LOGE("Elevation angle estimation:", "Calculated panel elevation target value is %2.0f", tmp_panel_elev_target_value);
+
+          if (id(sun_elevation).state < id(sun_sleep_mode_angle) or id(sleep_mode_active).state)
+          {
+              tmp_panel_elev_target_value = id(panel_elev_angle_min);
+              ESP_LOGE("Elevation angle estimation:", "Sun below sleep mode angle. Lets bring the panel to sleep position.");
+          } else           
+          {
+            if (tmp_panel_elev_target_value > id(panel_elev_angle_max))
+            {
+                tmp_panel_elev_target_value = id(panel_elev_angle_max);
+                ESP_LOGE("Elevation angle estimation:", "Target angle greater than max possible panel elevation angle. Target angle limited to max possible value.");
+            } else if (tmp_panel_elev_target_value < id(panel_elev_angle_min))
+            {
+                tmp_panel_elev_target_value = id(panel_elev_angle_min);
+                ESP_LOGE("Elevation angle estimation:", "Angle smaller than min possible panel elevation angle. Target angle limited to min possible value.");
+            }
+          }
+
+          ESP_LOGE("Elevation angle estimation:", "Panel elevation target value is %2.0f", tmp_panel_elev_target_value);
+          ESP_LOGE("Elevation angle estimation:", "Sun elevation value is %2.0f", id(sun_elevation).state);
+
+          float precision = 0.1;  // multiplicator to round to defined precision
+          tmp_panel_elev_target_value = floor(tmp_panel_elev_target_value / precision + 0.5) * precision;
+
+          auto call = id(panel_elev_target_angle).make_call();
+          call.set_value(tmp_panel_elev_target_value);
+          call.perform();
+
+
+  # checks if the motor is blocked and drives it back in case off
+  - id: perform_panel_blocked_check
+    mode: single
+    then:
+      - lambda: |-
+
+          if (id(motor_is_running_binary_sensor).state)
+          {
+            // first check if motor current is abnormal
+            if (id(panel_block_detection_by_motor_current_active) && id(motor_is_blocked_binary_sensor).state && !id(motor_is_blocked_old_state))
+            {
+              boolean initial_movement_opening = id(panel_lift).current_operation == CoverOperation::COVER_OPERATION_OPENING;
+
+              id(stop_boom_movement).execute();
+
+              delay(500);
+
+              if (initial_movement_opening)
+              {
+                id(start_boom_lowering).execute();
+              } else
+              {
+                id(start_boom_lifting).execute();
+              }
+
+              delay(1000);
+
+              id(stop_boom_movement).execute();
+
+              id(error_text).publish_state("Motor blocked state detected(high current). Movement stopped.");
+              
+            }
+            id(motor_is_blocked_old_state) = id(motor_is_blocked_binary_sensor).state;
+
+            // second check if boom angle changed while motor is moving
+            // This checks that the angle is changing in the same direction like the current linear actuator movement direction and stops the movement if not
+            if (id(panel_block_detection_by_angle_active) and (millis()-id(panel_moving_start_date)) >= 1000)
+            {
+              id(panel_bmi160).update();
+              id(overall_panel_acceleration).update();
+              id(panel_elevation_angle_sensor).update();  
+
+              boolean motor_movement_opening = id(panel_lift).current_operation == CoverOperation::COVER_OPERATION_OPENING;
+              float angle_change = id(panel_elevation_angle_sensor).state - id(panel_elevation_angle_sensor_old_state);
+              if(motor_movement_opening and (angle_change < id(panel_block_detection_opening_angle_change_minimum)))
+              {                
+                id(stop_boom_movement).execute();
+                id(error_text).publish_state("Motor blocked state detected(angle up not changing). Movement stopped.");
+                ESP_LOGE("Motor block detection:", "Panel elevation angle change is %2.0f", angle_change);
+              } else if(!motor_movement_opening and (angle_change > id(panel_block_detection_closing_angle_change_minimum)))
+              {
+                id(stop_boom_movement).execute();
+                id(error_text).publish_state("Motor blocked state detected(angle down not changing). Movement stopped.");
+                ESP_LOGE("Motor block detection:", "Panel elevation angle change is %2.0f", angle_change);
+              }
+            }
+            id(panel_elevation_angle_sensor_old_state) = id(panel_elevation_angle_sensor).state;
+
+          }
+
+
+  # this executes the needed steps to lift the boom
+  - id: start_boom_lifting
+    mode: single
+    then:
+      # Reset any possible error message first
+      - text_sensor.template.publish:
+          id: error_text
+          state: "None"
+
+      # now check if motor voltage is valid      
+      - if:
+          condition:
+            and:
+              - binary_sensor.is_on: motor_voltage_is_valid
+              - lambda: 'return id(panel_lift).current_operation != CoverOperation::COVER_OPERATION_OPENING;'  # We need to check this to avoid the down-up-movement if this script is triggered regularly
+          then:      
+            - cover.close: panel_lift  # this initial down movement often helped to initialize the first up movement of the linear actuator
+            - cover.stop: panel_lift
+            - delay: 300ms # Increase this value if needed. This pause is done to give the motor some time to stop. Otherwise the motor inrush current could be increased.
+            - cover.open: panel_lift
+            - lambda: "id(panel_moving_start_date) = millis();"
+            - lambda: "id(panel_elevation_angle_sensor_old_state) = id(panel_elevation_angle_sensor).state;"
+            - lambda: ESP_LOGE("Motor control:", "Boom lifting started.");
+          else:
+            - text_sensor.template.publish:
+                id: error_text
+                state: "Motor voltage is invalid. Movement stopped."
+
+  # this executes the needed steps to lower the boom
+  - id: start_boom_lowering
+    mode: single
+    then:
+      # Reset any possible error message first
+      - text_sensor.template.publish:
+          id: error_text
+          state: "None"   
+
+      # now check if motor voltage is valid 
+      - if:
+          condition:
+            binary_sensor.is_on: motor_voltage_is_valid
+          then: 
+            - cover.close: panel_lift
+            - lambda: "id(panel_moving_start_date) = millis();"
+            - lambda: "id(panel_elevation_angle_sensor_old_state) = id(panel_elevation_angle_sensor).state;"
+            - lambda: ESP_LOGE("Motor control:", "Boom lowering started.");
+          else:
+            - text_sensor.template.publish:
+                id: error_text
+                state: "Motor voltage is invalid. Movement stopped."
+
+  # this executes the needed steps to stop boom movement
+  - id: stop_boom_movement
+    mode: single
+    then:
+      - cover.stop: panel_lift
+      - delay: 300ms # Increase this value if needed. This pause is done to give the motor some time to stop. Otherwise the motor inrush current could be increased.
+      - lambda: ESP_LOGE("Motor control:", "Boom lifting stopped.");
+
+
+display:
+  - platform: ssd1306_i2c
+    model: "SH1106 128x64"
+    id: display1
+    address: 0x3C
+    update_interval: 1s
+    lambda: |-
+          if (id(display_on_off).state) 
+          {
+            id(screensaver_offset) = id(screensaver_offset) < 10 ? id(screensaver_offset) + 2 : 0;
+
+            it.print(0+id(screensaver_offset), 0+id(screensaver_offset), id(font3), "Sun-El:");
+            it.print(0+id(screensaver_offset), 12+id(screensaver_offset), id(font3), "Sun-Az:");
+            it.print(0+id(screensaver_offset), 24+id(screensaver_offset), id(font3), "Pan-Ez:");
+            it.print(0+id(screensaver_offset), 36+id(screensaver_offset), id(font3), "Pan-Az:");
+            it.print(0+id(screensaver_offset), 48+id(screensaver_offset), id(font3), "Time:");
+          } else 
+          {
+            it.fill(COLOR_OFF);
+          }
+
+
+font:
+  - file: 'fonts/calibri.ttf'
+    id: font1
+    size: 24
+  - file: 'fonts/calibri.ttf'
+    id: font2
+    size: 14
+  - file: 'fonts/calibri.ttf'
+    id: font3
+    size: 10
