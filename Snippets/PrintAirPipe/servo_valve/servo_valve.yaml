@@ -1,0 +1,185 @@
+esphome:
+  name: butterfly-valve-ctrlr-dev-1
+  friendly_name: butterfly_valve_controller_dev_1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret printAirPipe_servoValve_api_key
+
+ota:
+  password: !secret printAirPipe_servoValve_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Butterfly-Valve-Controller-Dev-1"
+    password: !secret printAirPipe_servoValve_ap_password
+
+captive_portal:   
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(id(valve_position_direct_control_number).state / 100.0), (id(valve_position_direct_control_number).state / 100.0), 0.0).perform();
+
+esp32_touch:
+  setup_mode: False
+
+web_server:
+  port: 80
+  auth:
+    username: !secret printAirPipe_servoValve_web_server_user
+    password: !secret printAirPipe_servoValve_web_server_password
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+
+output:
+  - platform: ledc
+    id: valve_servo_pwm_output
+    pin: GPIO21
+    frequency: 50 Hz
+
+servo:
+  - id: valve_servo
+    output: valve_servo_pwm_output
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+  - platform: internal_temperature
+    name: "Internal Temperature"
+
+number:
+  - platform: template
+    name: Valve servo direct control    
+    id: valve_position_direct_control_number
+    min_value: 0
+    initial_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    set_action:
+      then:
+        - servo.write:
+            id: valve_servo
+            level: !lambda 'return x / 100.0;'
+        - lambda: id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(x / 100.0), (x / 100.0), 0.0).perform();
+
+  - platform: template
+    name: Valve Open position
+    id: valve_opened_position
+    min_value: 0
+    initial_value: 100
+    max_value: 100
+    step: 1
+    optimistic: true
+    mode: box
+
+  - platform: template
+    name: Valve Closed position
+    id: valve_closed_position
+    min_value: 0
+    initial_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    mode: box
+
+button:
+  - platform: template
+    name: Close valve
+    id: close_valve_button
+    on_press:
+      then:
+        - servo.write:
+            id: valve_servo
+            level: !lambda 'return id(valve_closed_position).state;'
+        - number.set:
+            id: valve_position_direct_control_number
+            value: !lambda 'return id(valve_closed_position).state;'
+
+  - platform: template
+    name: Open valve
+    id: open_valve_button
+    on_press:
+      then:
+        - servo.write:
+            id: valve_servo
+            level: !lambda 'return id(valve_opened_position).state;'
+        - number.set:
+            id: valve_position_direct_control_number
+            value: !lambda 'return id(valve_opened_position).state;'
+
+binary_sensor:
+    
+  - platform: esp32_touch
+    name: "Touch sensor"
+    pin: GPIO33
+    threshold: 400
+    on_press:
+      then:
+        - lambda: |-
+           if (id(valve_position_direct_control_number).state >= 50)
+           {
+            id(close_valve_button).press(); 
+           } else 
+           {
+            id(open_valve_button).press();
+           }
+
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_OFF
+    id: status_led
+    type: GRB
+    variant: WS2812
+    pin: GPIO16
+    num_leds: 1
+    internal: true
+    
