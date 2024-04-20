@@ -1,0 +1,582 @@
+esphome:
+  name: relay-card-16ch-1
+  friendly_name: relay_card_16ch_1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret relcon_16_channel_api_key
+
+ota:
+  password: !secret relcon_16_channel_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Relay-Card-16Ch-1"
+    password: !secret relcon_16_channel_ap_password
+
+web_server:
+  port: 80
+  auth:
+    username: !secret relcon_16_channel_web_server_user
+    password: !secret relcon_16_channel_web_server_password
+
+captive_portal:
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO19
+
+font:
+  - file: 'fonts/calibri.ttf'
+    id: font1
+    size: 24
+  - file: 'fonts/calibri.ttf'
+    id: font2
+    size: 14
+  - file: 'fonts/calibri.ttf'
+    id: font3
+    size: 10
+
+display:
+  - platform: st7789v
+    id: display1
+    model: TTGO TDisplay 135x240
+    backlight_pin: GPIO4
+    cs_pin: GPIO5
+    dc_pin: GPIO16
+    reset_pin: GPIO23
+    rotation: 180
+    lambda: |-
+
+      auto red = Color(255, 0, 0);
+      auto green = Color(0, 255, 0);
+      auto blue = Color(0, 0, 255);
+      auto white = Color(255, 255, 255);
+      auto black = Color(0, 0, 0);
+
+      it.print(8, 1, id(font1), white, "Relais Status");
+
+      int font_offset_y=4;
+      int font_offset_x=13;
+
+      // Relais 1 =======================================================================
+      if (id(rot_encoder).state==1) {
+        it.filled_rectangle(7, 30, 60, 20, id(rel_1).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 30, 60, 20, id(rel_1).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 30+font_offset_y, id(font2), id(rot_encoder).state==1 ? black : white, "Rel 1");
+
+      // Relais 2 =======================================================================
+      if (id(rot_encoder).state==2) {
+        it.filled_rectangle(7, 54, 60, 20, id(rel_2).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 54, 60, 20, id(rel_2).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 54+font_offset_y, id(font2), id(rot_encoder).state==2 ? black : white, "Rel 2");
+
+      // Relais 3 =======================================================================
+      if (id(rot_encoder).state==3) {
+        it.filled_rectangle(7, 78, 60, 20, id(rel_3).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 78, 60, 20, id(rel_3).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 78+font_offset_y, id(font2), id(rot_encoder).state==3 ? black : white, "Rel 3");
+
+      // Relais 4 =======================================================================
+      if (id(rot_encoder).state==4) {
+        it.filled_rectangle(7, 102, 60, 20, id(rel_4).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 102, 60, 20, id(rel_4).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 102+font_offset_y, id(font2), id(rot_encoder).state==4 ? black : white, "Rel 4");   
+
+      // Relais 5 =======================================================================
+      if (id(rot_encoder).state==5) {
+        it.filled_rectangle(7, 126, 60, 20, id(rel_5).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 126, 60, 20, id(rel_5).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 126+font_offset_y, id(font2), id(rot_encoder).state==5 ? black : white, "Rel 5");
+
+      // Relais 6 =======================================================================
+      if (id(rot_encoder).state==6) {
+        it.filled_rectangle(7, 150, 60, 20, id(rel_6).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 150, 60, 20, id(rel_6).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 150+font_offset_y, id(font2), id(rot_encoder).state==6 ? black : white, "Rel 6");
+
+      // Relais 7 =======================================================================
+      if (id(rot_encoder).state==7) {
+        it.filled_rectangle(7, 174, 60, 20, id(rel_7).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 174, 60, 20, id(rel_7).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 174+font_offset_y, id(font2), id(rot_encoder).state==7 ? black : white, "Rel 7");
+
+      // Relais 8 =======================================================================
+      if (id(rot_encoder).state==8) {
+        it.filled_rectangle(7, 198, 60, 20, id(rel_8).state==1 ? red : white);
+      } else {
+        it.rectangle(7, 198, 60, 20, id(rel_8).state==1 ? red : white);
+      }
+      it.print(7+font_offset_x, 198+font_offset_y, id(font2), id(rot_encoder).state==8 ? black : white, "Rel 8");
+
+      // Relais 9 =======================================================================
+      if (id(rot_encoder).state==9) {
+        it.filled_rectangle(72, 30, 60, 20, id(rel_9).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 30, 60, 20, id(rel_9).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 30+font_offset_y, id(font2), id(rot_encoder).state==9 ? black : white, "Rel 9");
+
+      // Relais 10 =======================================================================
+      if (id(rot_encoder).state==10) {
+        it.filled_rectangle(72, 54, 60, 20, id(rel_10).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 54, 60, 20, id(rel_10).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 54+font_offset_y, id(font2), id(rot_encoder).state==10 ? black : white, "Rel 10"); 
+
+      // Relais 11 =======================================================================
+      if (id(rot_encoder).state==11) {
+        it.filled_rectangle(72, 78, 60, 20, id(rel_11).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 78, 60, 20, id(rel_11).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 78+font_offset_y, id(font2), id(rot_encoder).state==11 ? black : white, "Rel 11");    
+
+      // Relais 12 =======================================================================
+      if (id(rot_encoder).state==12) {
+        it.filled_rectangle(72, 102, 60, 20, id(rel_12).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 102, 60, 20, id(rel_12).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 102+font_offset_y, id(font2), id(rot_encoder).state==12 ? black : white, "Rel 12");
+
+      // Relais 13 =======================================================================
+      if (id(rot_encoder).state==13) {
+        it.filled_rectangle(72, 126, 60, 20, id(rel_13).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 126, 60, 20, id(rel_13).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 126+font_offset_y, id(font2), id(rot_encoder).state==13 ? black : white, "Rel 13");    
+
+      // Relais 14 =======================================================================
+      if (id(rot_encoder).state==14) {
+        it.filled_rectangle(72, 150, 60, 20, id(rel_14).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 150, 60, 20, id(rel_14).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 150+font_offset_y, id(font2), id(rot_encoder).state==14 ? black : white, "Rel 14");
+
+      // Relais 15 =======================================================================
+      if (id(rot_encoder).state==15) {
+        it.filled_rectangle(72, 174, 60, 20, id(rel_15).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 174, 60, 20, id(rel_15).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 174+font_offset_y, id(font2), id(rot_encoder).state==15 ? black : white, "Rel 15");    
+
+      // Relais 16 =======================================================================
+      if (id(rot_encoder).state==16) {
+        it.filled_rectangle(72, 198, 60, 20, id(rel_16).state==1 ? red : white);
+      } else {
+        it.rectangle(72, 198, 60, 20, id(rel_16).state==1 ? red : white);
+      }
+      it.print(72+font_offset_x, 198+font_offset_y, id(font2), id(rot_encoder).state==16 ? black : white, "Rel 16");  
+
+      // All relais off =======================================================================
+      if (id(rot_encoder).state==17) {
+        it.filled_rectangle(7, 222, 125, 10, white);
+      } else {
+        it.rectangle(7, 222, 125, 10, white);
+      }
+      it.print(55, 223, id(font3), id(rot_encoder).state==17 ? black : white, "All Off");  
+      
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+  - platform: internal_temperature
+    name: "Internal Temperature"
+
+    # Additional sensor configuration starts here
+
+  - platform: rotary_encoder
+    name: "Rotary Encoder"
+    id: rot_encoder
+    publish_initial_value: true
+    pin_a:
+      number: GPIO25
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO33
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    min_value: 0
+    max_value: 18
+    on_value_range:
+      - below: 0.9
+        then:
+          - sensor.rotary_encoder.set_value:
+              id: rot_encoder
+              value: 17
+          - component.update: display1
+      - above: 17.1
+        then:
+          - sensor.rotary_encoder.set_value:
+              id: rot_encoder
+              value: 1
+          - component.update: display1
+    on_clockwise:
+      - component.update: display1
+      - logger.log: "Turned Clockwise"
+    on_anticlockwise:
+      - component.update: display1
+      - logger.log: "Turned Anticlockwise"
+    on_value:
+      - component.update: display1
+
+
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: GPIO32
+      mode:
+        input: true
+        pullup: true
+    name: "Rotary encoder button"
+    id: "rotary_encoder_binary_button"
+    filters:
+      - delayed_on: 100ms
+    on_press:
+      then:
+        lambda: !lambda |-
+                switch (int(id(rot_encoder).state)) 
+                  {
+                    case 1: id(rel_1).toggle(); break;
+                    case 2: id(rel_2).toggle(); break;
+                    case 3: id(rel_3).toggle(); break;
+                    case 4: id(rel_4).toggle(); break;
+                    case 5: id(rel_5).toggle(); break;
+                    case 6: id(rel_6).toggle(); break;
+                    case 7: id(rel_7).toggle(); break;
+                    case 8: id(rel_8).toggle(); break;
+                    case 9: id(rel_9).toggle(); break;
+                    case 10: id(rel_10).toggle(); break;
+                    case 11: id(rel_11).toggle(); break;
+                    case 12: id(rel_12).toggle(); break;
+                    case 13: id(rel_13).toggle(); break;
+                    case 14: id(rel_14).toggle(); break;
+                    case 15: id(rel_15).toggle(); break;
+                    case 16: id(rel_16).toggle(); break;
+                    case 17: 
+                      id(rel_1).turn_off(); 
+                      id(rel_2).turn_off(); 
+                      id(rel_3).turn_off(); 
+                      id(rel_4).turn_off(); 
+                      id(rel_5).turn_off(); 
+                      id(rel_6).turn_off(); 
+                      id(rel_7).turn_off(); 
+                      id(rel_8).turn_off(); 
+                      id(rel_9).turn_off(); 
+                      id(rel_10).turn_off(); 
+                      id(rel_11).turn_off(); 
+                      id(rel_12).turn_off(); 
+                      id(rel_13).turn_off(); 
+                      id(rel_14).turn_off(); 
+                      id(rel_15).turn_off(); 
+                      id(rel_16).turn_off(); 
+                      break;
+                  }
+
+i2c:
+  sda: 21
+  scl: 22
+  scan: true
+  id: bus_a
+
+mcp23017:
+  - id: 'mcp23017_hub'
+    address: 0x27
+
+# Individual outputs
+switch:
+  - platform: gpio
+    name: "Relay 1"
+    id: rel_1
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 0
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 2"
+    id: rel_2
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 1
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+      
+  - platform: gpio
+    name: "Relay 3"
+    id: rel_3
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 2
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 4"
+    id: rel_4
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 3
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 5"
+    id: rel_5
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 4
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 6"
+    id: rel_6
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 5
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 7"
+    id: rel_7
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 6
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 8"
+    id: rel_8
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 7
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 9"
+    id: rel_9
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 8
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 10"
+    id: rel_10
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 9
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 11"
+    id: rel_11
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 10
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 12"
+    id: rel_12
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 11
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 13"
+    id: rel_13
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 12
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 14"
+    id: rel_14
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 13
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 15"
+    id: rel_15
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 14
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
+
+  - platform: gpio
+    name: "Relay 16"
+    id: rel_16
+    pin:
+      mcp23xxx: mcp23017_hub
+      number: 15
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - component.update: display1
+    on_turn_off:
+      - component.update: display1
