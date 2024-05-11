@@ -13,18 +13,18 @@ The axis is tracked using a 6000N linear actuator, which is controlled via an ES
 The STL files, material list and more info is available [here](https://nerdiy.de/en/product-2/sunchronizer-s1-400w-solar-tracker-for-elevation-axis-3d-printable-stl-files/).
 
 
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/11.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/12.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/1.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/2.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/3.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/4.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/5.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/6.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/7.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/8.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/9.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/Sunchronizer/images/10.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/11.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/12.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/1.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/2.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/3.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/4.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/5.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/6.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/7.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/8.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/9.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/Sunchronizer/images/10.png)
 
 ### Trademarks
 

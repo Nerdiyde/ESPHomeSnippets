@@ -13,11 +13,11 @@ Using a touch switch installed on the unit, the valve status can also be switche
 The STL files, material list and more info is available [here](https://nerdiy.de/en/product-2/printairpipe-125-servo-valve-3d-druckbar-stl-dateien/).
 
 
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/servo_valve/images/1.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/servo_valve/images/2.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/servo_valve/images/3.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/servo_valve/images/4.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/servo_valve/images/5.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/servo_valve/images/1.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/servo_valve/images/2.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/servo_valve/images/3.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/servo_valve/images/4.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/servo_valve/images/5.png)
 
 ### Trademarks
 

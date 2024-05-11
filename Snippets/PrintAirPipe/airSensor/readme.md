@@ -13,12 +13,12 @@ This means you can also react to certain values. For example, after detecting a 
 The STL files, material list and more info is available [here](https://nerdiy.de/en/product-2/printairpipe-125-air-sensor-segment-3d-druckbar-stl-dateien/).
 
 
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/airSensor/images/1.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/airSensor/images/2.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/airSensor/images/3.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/airSensor/images/4.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/airSensor/images/5.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/tree/main/Snippets/PrintAirPipe/airSensor/images/6.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/airSensor/images/1.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/airSensor/images/2.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/airSensor/images/3.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/airSensor/images/4.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/airSensor/images/5.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/PrintAirPipe/airSensor/images/6.png)
 
 ### Trademarks
 
