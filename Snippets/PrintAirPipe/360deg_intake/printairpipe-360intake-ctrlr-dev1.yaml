@@ -1,0 +1,229 @@
+esphome:
+  name: printairpipe-360intake-ctrlr
+  friendly_name: PrintAirPipe_360intake_ctrlr
+
+esp32:
+  framework:
+    type: arduino
+  board: esp32-s3-devkitc-1
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret printAirPipe_360degIntake_api_key
+
+ota:
+  password: !secret printAirPipe_360degIntake_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Printairpipe-360Intake-Ctrlr"
+    password: !secret printAirPipe_360degIntake_ap_password
+
+captive_portal:
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(id(lid_position_direct_control_number).state / id(lid_opened_position).state), (id(lid_position_direct_control_number).state / id(lid_opened_position).state), 0.0).perform();
+
+esp32_touch:
+  setup_mode: False
+  measurement_duration: 0.25ms
+
+web_server:
+  port: 80
+  auth:
+    username: !secret printAirPipe_360degIntake_web_server_user
+    password: !secret printAirPipe_360degIntake_web_server_password
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: Connected SSID
+    bssid:
+      name: Connected BSSID
+    mac_address:
+      name: Mac Wifi Address
+    scan_results:
+      name: Latest Scan Results
+
+output:
+  - platform: ledc
+    id: lid_servo_pwm_output
+    pin: GPIO04
+    frequency: 50 Hz
+
+servo:
+  - id: lid_servo
+    output: lid_servo_pwm_output
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+number:
+  - platform: template
+    name: "Test repititions"
+    id: number_of_test_repititions
+    max_value: 100
+    min_value: 0
+    step: 1
+    initial_value: 5
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: Lid servo direct control    
+    id: lid_position_direct_control_number
+    min_value: 0
+    initial_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    set_action:
+      then:
+        - servo.write:
+            id: lid_servo
+            level: !lambda 'return x / 100.0;'
+        - lambda: id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(x / id(lid_opened_position).state), (x / id(lid_opened_position).state), 0.0).perform();
+
+  - platform: template
+    name: Lid Open position
+    id: lid_opened_position
+    min_value: 0
+    initial_value: 53
+    max_value: 100
+    step: 1
+    optimistic: true
+    mode: box
+
+  - platform: template
+    name: Lid Closed position
+    id: lid_closed_position
+    min_value: 0
+    initial_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    mode: box
+
+button:
+  - platform: template
+    name: Close lid
+    id: close_lid_button
+    on_press:
+      then:
+        - servo.write:
+            id: lid_servo
+            level: !lambda 'return id(lid_closed_position).state;'
+        - number.set:
+            id: lid_position_direct_control_number
+            value: !lambda 'return id(lid_closed_position).state;'
+
+  - platform: template
+    name: Open lid
+    id: open_lid_button
+    on_press:
+      then:
+        - servo.write:
+            id: lid_servo
+            level: !lambda 'return id(lid_opened_position).state;'
+        - number.set:
+            id: lid_position_direct_control_number
+            value: !lambda 'return id(lid_opened_position).state;'
+
+  - platform: template
+    name: Toggle lid
+    id: toggle_lid_button
+    on_press:
+      then:
+        - lambda: |-
+           if (id(lid_position_direct_control_number).state >= 50)
+           {
+            id(close_lid_button).press(); 
+           } else 
+           {
+            id(open_lid_button).press();
+           }
+
+  - platform: template
+    name: "Start longterm test"
+    id: button_start_longterm_test
+    on_press:
+      then:
+        - script.execute: perform_longterm_test
+
+binary_sensor:
+    
+  - platform: esp32_touch
+    name: "Touch sensor"
+    pin: GPIO07
+    threshold: 500000
+    on_press:
+      then:
+        - lambda: |-
+           if (id(lid_position_direct_control_number).state >= 50)
+           {
+            id(close_lid_button).press(); 
+           } else 
+           {
+            id(open_lid_button).press();
+           }
+
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_OFF
+    id: status_led
+    type: GRB
+    variant: WS2812
+    pin: GPIO02
+    num_leds: 1
+    internal: true
+    default_transition_length: 250ms
+    
+
+script:
+
+  - id: perform_longterm_test
+    mode: single
+    then:  
+      - repeat:
+          count: !lambda return id(number_of_test_repititions).state;
+          then:
+            - button.press: close_lid_button
+            - delay: 1s
+            - button.press: open_lid_button
+            - delay: 1s
