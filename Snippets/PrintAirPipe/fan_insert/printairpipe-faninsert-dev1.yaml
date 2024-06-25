@@ -1,0 +1,330 @@
+esphome:
+  name: printairpipe-faninsert-dev1
+  friendly_name: PrintAirPipe_FanInsert_dev1
+
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          auto call_light = id(light_1).turn_on();
+          call_light.set_effect("slow_pulse");
+          call_light.set_brightness(id(light_brightness).state / 100.0);
+          call_light.perform();
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret printAirPipe_fan_insert_api_key
+
+ota:
+  platform: esphome
+  password: !secret printAirPipe_fan_insert_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Printairpipe-Faninsert-Dev1"
+    password: !secret printAirPipe_fan_insert_ap_password
+
+captive_portal:
+
+esp32_touch:
+  setup_mode: False
+  measurement_duration: 0.25ms
+
+web_server:
+  port: 80
+  auth:
+    username: !secret printAirPipe_fan_insert_web_server_user
+    password: !secret printAirPipe_fan_insert_web_server_password
+    
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+# Reports RPM by pulse_counter
+  - platform: pulse_counter
+    pin: GPIO03
+    name: Fan Speed 1
+    id: speed_signal_fan_1
+    unit_of_measurement: 'RPM'
+    filters:
+      - lambda: |-
+          return (x*0.5);
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: DISABLE
+    update_interval: 10s
+
+select:
+
+  - platform: template
+    name: "Fan speed"
+    id: fan_speed_select
+    disabled_by_default: True
+    options:
+      - "Off"
+      - "35%"
+      - "65%"
+      - "100%"
+    initial_option: "Off"
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+             format: "Chosen option: %s "
+             args: ["x.c_str()"]
+        - lambda: |-   
+            auto index = id(fan_speed_select).active_index();     
+            ESP_LOGI("main", "Option at index %d is active", index.value());
+            if (index.value() == 0)
+            {
+              auto call = id(fan_1).turn_off();
+              call.perform();
+            } else if (index.value() == 1)
+            {  
+              auto call = id(fan_1).turn_on();
+              call.set_speed(35);
+              call.perform();
+            }  else if (index.value() == 2)
+            {  
+              auto call = id(fan_1).turn_on();
+              call.set_speed(65);
+              call.perform();
+            } else if (index.value() == 3)
+            {  
+              auto call = id(fan_1).turn_on();
+              call.set_speed(100);
+              call.perform();
+            }
+
+binary_sensor:
+    
+  - platform: esp32_touch
+    name: "Touch sensor"
+    pin: GPIO01
+    threshold: 500000
+    on_press:
+      then:
+        - select.next:
+            id: fan_speed_select
+            cycle: True
+    filters:
+      - delayed_on: 50ms
+
+output:
+  - platform: gpio
+    pin: GPIO02
+    id: power_supply_pin_fan_1
+
+  - platform: ledc
+    pin: GPIO04
+    frequency: 25000 Hz
+    id: pwm_to_fan_signal_1
+
+fan:
+  - platform: speed
+    output: pwm_to_fan_signal_1
+    name: "Fan"
+    id: fan_1
+    on_turn_on:
+      - output.turn_on: power_supply_pin_fan_1
+
+    on_turn_off:
+      - output.turn_off: power_supply_pin_fan_1
+      - delay: 1s
+      - output.set_level:
+          id: pwm_to_fan_signal_1
+          level: 100%
+      - lambda: |-  
+          if (id(light_on_off_switch).state)
+          {
+            auto call_light = id(light_1).turn_on();
+            call_light.set_effect("slow_pulse");
+            call_light.set_brightness(id(light_brightness).state / 100.0);
+            call_light.perform();
+          }
+
+    on_speed_set:
+      - lambda: |-
+          if (id(light_on_off_switch).state)
+          {
+            if (x > 0 && x < 65)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 1");  
+              call_light.set_brightness(id(light_brightness).state / 100.0);            
+              call_light.perform();
+            }  else if (x >= 65 && x < 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 2");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            } else if (x == 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 3");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            }
+          }
+
+switch:
+  - platform: template
+    name: "Light on/off"
+    id: light_on_off_switch
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON
+    disabled_by_default: True
+    on_turn_off: 
+      then:
+        - lambda:
+            auto call_light = id(light_1).turn_off();
+            call_light.perform();
+    on_turn_on: 
+      then:
+        - lambda:
+            int speed = id(fan_1).speed;
+            if (speed > 0 && speed < 65)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 1");  
+              call_light.set_brightness(id(light_brightness).state / 100.0);            
+              call_light.perform();
+            }  else if (speed >= 65 && speed < 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 2");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            } else if (speed == 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 3");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            }
+
+number:
+
+  - platform: template
+    name: "Light brightness"
+    id: light_brightness
+    max_value: 100
+    min_value: 35
+    initial_value: 50
+    step: 1
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    mode: slider
+    set_action:
+      then:
+        - lambda: |-
+            auto call = id(light_1).turn_on();
+            call.set_brightness(x / 100.0);
+            call.perform();
+
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_OFF
+    id: light_1
+    type: GRB
+    variant: WS2812
+    pin: GPIO07
+    num_leds: 3
+    name: "LEDs"
+    internal: true
+    default_transition_length: 250ms
+    effects:
+      - pulse:
+          name: pulse
+          transition_length: 250ms
+          update_interval: 250ms
+      - pulse:
+          name: slow_pulse
+          transition_length:
+            on_length: 250ms
+            off_length: 2000ms
+          update_interval: 2250ms
+          max_brightness: 50%
+      - addressable_lambda:
+          name: "Fan speed 1"
+          update_interval: 16ms
+          lambda: |-
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color::BLACK;
+
+              it[0] = Color(red, green, blue);
+      - addressable_lambda:
+          name: "Fan speed 2"
+          update_interval: 16ms
+          lambda: |-
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color::BLACK;
+
+              it[0] = Color(red, green, blue);
+              it[1] = Color(red, green, blue);
+              
+      - addressable_lambda:
+          name: "Fan speed 3"
+          update_interval: 16ms
+          lambda: |-
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color(red, green, blue);
+    
+    
