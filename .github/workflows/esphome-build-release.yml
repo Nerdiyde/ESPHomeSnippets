@@ -1,0 +1,51 @@
+name: Build and Release ESPHome Firmware
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up ESPHome
+        uses: esphome/esphome-action@v2
+        with:
+          install_version: latest
+
+      - name: Create output directory
+        run: mkdir -p firmwares
+
+      - name: Compile all YAML files
+        run: |
+          find . -name "*.yaml" | while read -r yaml_file; do
+            echo "Compiling $yaml_file"
+            esphome compile "$yaml_file"
+            cp .esphome/build/*/*.bin firmwares/ || true
+          done
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware-binaries
+          path: firmwares/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: firmware-binaries
+          path: firmwares/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: firmwares/*
