@@ -119,7 +119,6 @@ esp32_touch:
   id: esp32_touch_sensor
 
 improv_serial:
-  next_url: http://{{ip_address}}
 
 esp32_improv:
   authorizer: none
@@ -168,18 +167,18 @@ text_sensor:
   - platform: wifi_info
     ip_address:
       name: ESP IP Address
+      id: esp_ip_address_id
     ssid:
       name: ESP Connected SSID
+      id: esp_connected_ssid_id
     bssid:
       name: ESP Connected BSSID
+      id: esp_connected_bssid_id
     mac_address:
       name: ESP Mac Wifi Address
-    scan_results:
-      name: ESP Latest Scan Results
+      id: esp_mac_wifi_address_id
 
-
-binary_sensor:
-    
+binary_sensor:    
   - platform: esp32_touch
     name: "Touch sensor +"
     id: touch_sensor_plus
@@ -237,6 +236,7 @@ sensor:
 button:
   - platform: restart
     name: "Restart ESP"
+    id: restart_button_id
 
 light:
   - platform: neopixelbus
