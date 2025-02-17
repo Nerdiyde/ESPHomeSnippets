@@ -28,11 +28,9 @@ substitutions:
   friendly_name: "NerdDIYs SelfIY Ring"
 
   # security relevant definitions
-  improv_password: "please_change_me"
-  ap_password: "please_change_me"
-  web_user: "NRDY"
-  web_password: "please_change_me"
-  ota_password: "please_change_me"
+  # web_user: "NRDY"    # uncomment to activate user/password protection for webserver
+  # web_password: "please_change_me"    # uncomment to activate user/password protection for webserver
+  # ota_password: "please_change_me"    # uncomment to activate password protection for OTA
   http_request_ssl_verification: "False"
 
   # GPIO pin definitions
@@ -99,7 +97,7 @@ api:
 
 ota:
   - platform: esphome
-    password: "${ota_password}"  
+    # password: "${ota_password}"    # uncomment to activate password protection for OTA
   - platform: http_request
     id: ota_http_request
 
@@ -112,27 +110,27 @@ dashboard_import:
 
 wifi:
   ap:
-    password: "${ap_password}"
 
 captive_portal:
 
 esp32_touch:
   setup_mode: "${touch_sensors_setup_mode}"
   measurement_duration: 0.25ms
+  id: esp32_touch_sensor
 
 improv_serial:
   next_url: http://{{ip_address}}
 
 esp32_improv:
   authorizer: none
-  #password: "${improv_password}"
     
 web_server:
   port: 80
   version: 3
-  auth:
-    username: "${web_user}"
-    password: "${web_password}"
+  id: web_server_standard
+  # auth:    # uncomment to activate user/password protection for webserver
+    # username: "${web_user}"    # uncomment to activate user/password protection for webserver
+    # password: "${web_password}"    # uncomment to activate user/password protection for webserver
 
 interval:
   - interval: 500ms
@@ -165,6 +163,7 @@ interval:
 text_sensor:
   - platform: version
     name: "ESPHome Version"
+    id: esphome_version_sensor_id
 
   - platform: wifi_info
     ip_address:
@@ -233,6 +232,7 @@ sensor:
   - platform: uptime
     name: Uptime
     entity_category: "diagnostic"
+    id: uptime_sensor_id
 
 button:
   - platform: restart

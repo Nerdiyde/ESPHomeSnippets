@@ -1,0 +1,1378 @@
+#                                  _   _                 _  _               _
+#                                 | \ | |               | |(_)             | |
+#  __      ____      ____      __ |  \| |  ___  _ __  __| | _  _   _     __| |  ___
+#  \ \ /\ / /\ \ /\ / /\ \ /\ / / | . ` | / _ \| '__|/ _` || || | | |   / _` | / _ \
+#   \ V  V /  \ V  V /  \ V  V /_ | |\  ||  __/| |  | (_| || || |_| | _| (_| ||  __/
+#    \_/\_/    \_/\_/    \_/\_/(_)|_| \_| \___||_|   \__,_||_| \__, |(_)\__,_| \___|
+#                                                               __/ |
+#                                                              |___/
+#     Infos on https://www.Nerdiy.de/
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.#
+#     You can find additional infos about the licensing here: https://nerdiy.de/en/lizenz/
+#
+
+substitutions:
+  name: "nerdiys-mini-wordclock"
+  friendly_name: "NerdDIYs Mini Wordclock"
+
+  # security relevant definitions
+  improv_password: "please_change_me"
+  ap_password: "please_change_me"
+  web_user: "NRDY"
+  web_password: "please_change_me"
+  ota_password: "please_change_me"
+  http_request_ssl_verification: "False"
+
+  # GPIO pin definitions
+  gpio_led_strip: "GPIO14"
+  gpio_sda: "GPIO21"
+  gpio_scl: "GPIO22"
+
+  # Other definitions
+  log_level: "INFO"    # If you deactivate this it also deactivates the improv_serial option. See here for more info: https://esphome.io/components/improv_serial
+  led_matrix_width: "11"
+  led_matrix_height: "11"  # actually the "base led matrix" is only 11x10 pixel big. We just add an additional row here to handle the minute leds. See more info in the pixel_mapper section.
+    
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  min_version: "2024.10.0"
+
+  project:
+    name: nerdiy.mini-wordclock
+    version: "1.0.0"
+    
+  on_boot:
+    - priority: 300
+      then:
+        - ds3231.read_time:    # to read the time directly after boot from rtc  on_boot:
+    - priority: -100
+      then:
+        - lambda: |-
+            id(device_fully_booted) = true;
+
+external_components:
+  - source: my_components
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+    password: "${ota_password}"  
+  - platform: http_request
+    id: ota_http_request
+
+http_request:
+  verify_ssl: "${http_request_ssl_verification}"
+
+dashboard_import:
+  package_import_url: github://Nerdiyde/ESPHomeSnippets/blob/main/Snippets/pxlBlck_WordClock_Mini/nerdiys-pxlBlck-wordclock-mini.yaml
+  import_full_config: false
+
+wifi:
+  ap:
+    password: "${ap_password}" 
+
+captive_portal:
+
+improv_serial:
+  next_url: http://{{ip_address}}
+
+esp32_improv:
+  authorizer: none
+  #password: "${improv_password}"
+
+web_server:
+  version: 3
+  local: true
+  port: 80
+  auth:
+    username: "${web_user}"
+    password: "${web_password}"
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+    on_time_sync:
+      then:
+        ds3231.write_time:
+          
+  - platform: ds3231
+    id: ds3231_time
+    timezone: Europe/Berlin
+    address: 0x68
+    update_interval: never
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+
+  - platform: template
+    name: "RTC Time"
+    lambda: |-
+            char str[17];
+            time_t currTime = id(ds3231_time).now().timestamp;
+            strftime(str, sizeof(str), "%d.%m.%Y %H:%M", localtime(&currTime));
+            return  { str };
+    update_interval: 60s
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+  - platform: internal_temperature
+    name: "Internal Temperature"
+
+i2c:
+  sda: ${gpio_sda}
+  scl: ${gpio_scl}
+  scan: true
+  id: bus_a
+
+pcf8574:
+  - id: 'pcf8575_hub'
+    address: 0x20
+    pcf8575: true
+    i2c_id: bus_a
+
+binary_sensor:
+
+  - platform: gpio
+    name: "Brightness +"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 2
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - number.increment: 
+              id: display_brightness
+              cycle: false
+
+  - platform: gpio
+    name: "Color next"
+    id: color_next_button
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 3
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - number.increment:
+              id: color_wheel_hue
+              cycle: true
+
+  - platform: gpio
+    name: "Spare BTN1"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 4
+      mode:
+        input: true
+      inverted: true
+
+  - platform: gpio
+    name: "Spare BTN2"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 5
+      mode:
+        input: true
+      inverted: true
+
+  - platform: gpio
+    name: "Color set to white"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 11
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - number.to_max: itis_color_red_value
+        - number.to_max: itis_color_green_value
+        - number.to_max: itis_color_blue_value
+
+        - number.to_max: oclock_color_red_value
+        - number.to_max: oclock_color_green_value
+        - number.to_max: oclock_color_blue_value
+
+        - number.to_max: minute_words_color_red_value
+        - number.to_max: minute_words_color_green_value
+        - number.to_max: minute_words_color_blue_value
+
+        - number.to_max: minute_points_color_red_value
+        - number.to_max: minute_points_color_green_value
+        - number.to_max: minute_points_color_blue_value
+
+        - number.to_max: hour_number_color_red_value
+        - number.to_max: hour_number_color_green_value
+        - number.to_max: hour_number_color_blue_value
+
+  - platform: gpio
+    name: "\"It is\" on/off"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 10
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - switch.toggle: show_it_is_enabled
+
+  - platform: gpio
+    name: "Color previous"
+    id: color_previous_button
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 12
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - number.decrement:
+              id: color_wheel_hue
+              cycle: true
+
+  - platform: gpio
+    name: "Brightness -"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 13
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - number.decrement: 
+              id: display_brightness
+              cycle: false
+
+  - platform: gpio
+    name: "Hour +"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 0
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - lambda: |-
+              auto now = id(ds3231_time).utcnow();
+
+              if (!now.is_valid()) 
+              {
+                ESP_LOGE("ds3231", "Invalid system time, not syncing to RTC.");
+              } else
+              {
+                time_t current_time = id(ds3231_time).timestamp_now();
+                auto new_time = ESPTime::from_epoch_utc(current_time + 3600);
+                id(ds3231_time).write_time(new_time);
+                id(ds3231_time).read_time();
+              }
+
+  - platform: gpio
+    name: "Minute +"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 1
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - lambda: |-
+              auto now = id(ds3231_time).utcnow();
+
+              if (!now.is_valid()) 
+              {
+                ESP_LOGE("ds3231", "Invalid system time, not syncing to RTC.");
+              } else
+              {
+                time_t current_time = id(ds3231_time).timestamp_now();
+                auto new_time = ESPTime::from_epoch_utc(current_time + 60);
+                id(ds3231_time).write_time(new_time);
+                id(ds3231_time).read_time();
+              }
+
+  - platform: gpio
+    name: "Minute -"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 14
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - lambda: |-
+              auto now = id(ds3231_time).utcnow();
+
+              if (!now.is_valid()) 
+              {
+                ESP_LOGE("ds3231", "Invalid system time, not syncing to RTC.");
+              } else
+              {
+                time_t current_time = id(ds3231_time).timestamp_now();
+                auto new_time = ESPTime::from_epoch_utc(current_time - 60);
+                id(ds3231_time).write_time(new_time);
+                id(ds3231_time).read_time();
+              }
+
+  - platform: gpio
+    name: "Hour -"
+    pin:
+      pcf8574: pcf8575_hub      
+      number: 15
+      mode:
+        input: true
+      inverted: true
+    on_press:
+      then:
+        - lambda: |-
+              auto now = id(ds3231_time).utcnow();
+
+              if (!now.is_valid()) 
+              {
+                ESP_LOGE("ds3231", "Invalid system time, not syncing to RTC.");
+              } else
+              {
+                time_t current_time = id(ds3231_time).timestamp_now();
+                auto new_time = ESPTime::from_epoch_utc(current_time - 3600);
+                id(ds3231_time).write_time(new_time);
+                id(ds3231_time).read_time();
+              }
+
+interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if(id(color_next_button).state)
+          {
+            auto call = id(color_wheel_hue).make_call();
+            call.number_increment(true);
+            call.perform();
+          }
+
+          if(id(color_previous_button).state)
+          {
+            auto call = id(color_wheel_hue).make_call();
+            call.number_decrement(true);
+            call.perform();
+          }
+
+number:
+  - platform: template
+    name: Hour Color Red
+    id: hour_number_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Hour Color Green
+    id: hour_number_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Hour Color Blue
+    id: hour_number_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Minute Words Color Red
+    id: minute_words_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Minute Words Color Green
+    id: minute_words_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Minute Words Color Blue
+    id: minute_words_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Minute Points Color Red
+    id: minute_points_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Minute Points Color Green
+    id: minute_points_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Minute Points Color Blue
+    id: minute_points_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: "\"It is\" Color Red"
+    id: itis_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: "\"It is\" Color Green"
+    id: itis_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: "\"It is\" Color Blue"
+    id: itis_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: "\"o'clock\" Color Red"
+    id: oclock_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: "\"o'clock\" Color Green"
+    id: oclock_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: "\"o'clock\" Color Blue"
+    id: oclock_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: slider
+    icon: mdi:palette-outline
+
+  - platform: template
+    name: Indicator fade delay
+    id: indicator_fade_out_step_size
+    max_value: 100
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 60
+    mode: slider
+    unit_of_measurement: "%"
+
+  - platform: template
+    name: Display brightness
+    id: display_brightness
+    max_value: 100
+    min_value: 10
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 50
+    mode: slider
+
+  - platform: template
+    name: Color Wheel HUE
+    id: color_wheel_hue
+    max_value: 360
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    internal: true
+    initial_value: 0
+    mode: slider
+    on_value: 
+      then:    
+        - logger.log:
+            format: "Color wheel hue value: %.1f"
+            args: [ 'id(color_wheel_hue).state' ]
+            level: DEBUG
+            tag: "ColorWheel"
+
+        - lambda: |-
+            if(id(device_fully_booted))
+            {
+              float red = 1.0;
+              float green = 0.0;
+              float blue = 0.0;
+
+              hsv_to_rgb(id(color_wheel_hue).state, 1.0, 1.0, red, green, blue);
+              //hsv_to_rgb(100, 1.0, 1.0, red, green, blue);
+
+              ESP_LOGD("main", "New red 1 %f", red); 
+              ESP_LOGD("main", "New green 1 %f", green); 
+              ESP_LOGD("main", "New blue 1 %f", blue); 
+
+              red = red * 255.0;
+              green = green * 255.0;
+              blue = blue * 255.0;
+
+              ESP_LOGD("main", "New red 2 %f", red); 
+              ESP_LOGD("main", "New green 2 %f", green); 
+              ESP_LOGD("main", "New blue 2 %f", blue); 
+
+              auto call = id(itis_color_red_value).make_call();
+              call.set_value(red);
+              call.perform();
+
+              auto call1 = id(itis_color_green_value).make_call();
+              call1.set_value(green);
+              call1.perform();
+
+              auto call2 = id(itis_color_blue_value).make_call();
+              call2.set_value(blue);
+              call2.perform();
+
+              auto call3 = id(oclock_color_red_value).make_call();
+              call3.set_value(red);
+              call3.perform();
+
+              auto call4 = id(oclock_color_green_value).make_call();
+              call4.set_value(green);
+              call4.perform();
+              
+              auto call5 = id(oclock_color_blue_value).make_call();
+              call5.set_value(blue);
+              call5.perform();            
+
+              auto call6 = id(minute_words_color_red_value).make_call();
+              call6.set_value(red);
+              call6.perform();
+
+              auto call7 = id(minute_words_color_green_value).make_call();
+              call7.set_value(green);
+              call7.perform();
+              
+              auto call8 = id(minute_words_color_blue_value).make_call();
+              call8.set_value(blue);
+              call8.perform();
+
+              auto call9 = id(minute_points_color_red_value).make_call();
+              call9.set_value(red);
+              call9.perform();
+
+              auto call10 = id(minute_points_color_green_value).make_call();
+              call10.set_value(green);
+              call10.perform();
+              
+              auto call11 = id(minute_points_color_blue_value).make_call();
+              call11.set_value(blue);
+              call11.perform();
+
+              auto call12 = id(hour_number_color_red_value).make_call();
+              call12.set_value(red);
+              call12.perform();
+
+              auto call13 = id(hour_number_color_green_value).make_call();
+              call13.set_value(green);
+              call13.perform();
+              
+              auto call14 = id(hour_number_color_blue_value).make_call();
+              call14.set_value(blue);
+              call14.perform();
+            }
+
+select:
+  - platform: template
+    name: "Rotation"
+    id: display_rotation_select
+    disabled_by_default: True
+    options:
+      - 0°
+      - 180°
+    initial_option: 0°
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+             format: "Chosen option: %s "
+             args: ["x.c_str()"]
+        - lambda: |-   
+            auto index = id(display_rotation_select).active_index();     
+            ESP_LOGI("main", "Option at index %d is active", index.value());  
+            if (index.value() == 0)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_0_DEGREES;
+              id(led_matrix_display).set_rotation(DISPLAY_ROTATION_0_DEGREES);
+              ESP_LOGD("lambda", "Set rotation to 0°");
+            } else if (index.value() == 1)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_180_DEGREES;
+              id(led_matrix_display).set_rotation(DISPLAY_ROTATION_180_DEGREES); 
+              ESP_LOGD("lambda", "Set rotation to 180°");             
+            }
+        - component.update: led_matrix_display
+
+  - platform: template
+    name: "Color palette"
+    id: display_color_palette_select
+    options:
+      - Standard
+      - Al
+      - Fall Cup
+      - Rainbow finish
+      - Bookend Grades
+      - Magu Botanicals
+    initial_option: Standard
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+             format: "Chosen option: %s "
+             args: ["x.c_str()"]
+        - lambda: |-   
+            auto index = id(display_rotation_select).active_index();     
+            ESP_LOGI("main", "Option at index %d is active", index.value());  
+            if (index.value() == 0)
+            {
+              //id(hour_number_color_red_value).make_call().set_value(255).perform();
+              //id(hour_number_color_green_value).make_call().set_value(255).perform();
+              //id(hour_number_color_blue_value).make_call().set_value(255).perform();
+
+              //id(minute_words_color_red_value).make_call().set_value(255).perform();
+              //id(minute_words_color_green_value).make_call().set_value(255).perform();
+              //id(minute_words_color_blue_value).make_call().set_value(255).perform();
+
+            } else if (index.value() == 1)
+            {
+              // rgb(255, 187, 92) rgb(255, 155, 80) rgb(226, 94, 62) rgb(198, 61, 47)
+              //id(hour_number_color_red_value).make_call().set_value(255).perform();
+              //id(hour_number_color_green_value).make_call().set_value(187).perform();
+              //id(hour_number_color_blue_value).make_call().set_value(92).perform();
+
+              //id(minute_words_color_red_value).make_call().set_value(255).perform();
+              //id(minute_words_color_green_value).make_call().set_value(155).perform();
+              //id(minute_words_color_blue_value).make_call().set_value(80).perform();
+
+            } else if (index.value() == 2)
+            {
+              // rgb(69, 255, 202) rgb(254, 255, 172) rgb(255, 182, 217) rgb(214, 123, 255)
+              //id(hour_number_color_red_value).make_call().set_value(69).perform();
+              //id(hour_number_color_green_value).make_call().set_value(255).perform();
+              //id(hour_number_color_blue_value).make_call().set_value(202).perform();
+
+              //id(minute_words_color_red_value).make_call().set_value(254).perform();
+              //id(minute_words_color_green_value).make_call().set_value(255).perform();
+              //id(minute_words_color_blue_value).make_call().set_value(172).perform();
+         
+            } else if (index.value() == 3)
+            {
+              // rgb(61, 12, 17) rgb(216, 0, 50) rgb(247, 140, 162) rgb(249, 222, 201)
+              //id(hour_number_color_red_value).make_call().set_value(61).perform();
+              //id(hour_number_color_green_value).make_call().set_value(12).perform();
+              //id(hour_number_color_blue_value).make_call().set_value(17).perform();
+
+              //id(minute_words_color_red_value).make_call().set_value(216).perform();
+              //id(minute_words_color_green_value).make_call().set_value(0).perform();
+              //id(minute_words_color_blue_value).make_call().set_value(50).perform();
+      
+            } else if (index.value() == 4)
+            {
+              // rgb(235, 228, 209) rgb(180, 180, 179) rgb(38, 87, 124) rgb(229, 86, 4)
+              //id(hour_number_color_red_value).make_call().set_value(235).perform();
+              //id(hour_number_color_green_value).make_call().set_value(228).perform();
+              //id(hour_number_color_blue_value).make_call().set_value(209).perform();
+
+              //id(minute_words_color_red_value).make_call().set_value(180).perform();
+              //id(minute_words_color_green_value).make_call().set_value(180).perform();
+              //id(minute_words_color_blue_value).make_call().set_value(179).perform();
+
+            } else if (index.value() == 5)
+            {
+              // rgb(1, 106, 112) rgb(255, 255, 221) rgb(210, 222, 50) rgb(162, 197, 121)
+              //id(hour_number_color_red_value).make_call().set_value(1).perform();
+              //id(hour_number_color_green_value).make_call().set_value(106).perform();
+              //id(hour_number_color_blue_value).make_call().set_value(112).perform();
+
+              //id(minute_words_color_red_value).make_call().set_value(255).perform();
+              //id(minute_words_color_green_value).make_call().set_value(255).perform();
+              //id(minute_words_color_blue_value).make_call().set_value(221).perform();
+
+            }
+
+globals:
+  - id: global_display_rotation
+    type: esphome::display::DisplayRotation
+    restore_value: yes
+    initial_value: 'DISPLAY_ROTATION_0_DEGREES'
+
+  - id: device_fully_booted
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+switch:
+  - platform: template
+    name: "Display On/Off"
+    id: display_on_off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+    turn_on_action:
+      - if:
+          condition:
+            lambda: 'return id(display_brightness).state == 0;'
+          then:
+            - number.to_max:
+                id: display_brightness
+
+  - platform: template
+    name: "Fade out clock indicators"
+    id: indicator_fade_off_enabled
+    icon: mdi:update
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+
+  - platform: template
+    name: "LED Matrix test mode"
+    id: matrix_test_mode_on
+    icon: mdi:update
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF 
+
+  - platform: template
+    name: "\"It is\" On/Off"
+    id: show_it_is_enabled
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+    turn_on_action:
+      - if:
+          condition:
+            lambda: 'return id(itis_color_red_value).state == 0 && id(itis_color_green_value).state == 0 && id(itis_color_blue_value).state == 0;'
+          then:
+            - number.to_max:
+                id: itis_color_red_value
+            - number.to_max:
+                id: itis_color_green_value
+            - number.to_max:
+                id: itis_color_blue_value
+    
+  - platform: template
+    name: "\"O'clock\" On/Off"
+    id: show_o_clock_enabled
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+    turn_on_action:
+      - if:
+          condition:
+            lambda: 'return id(oclock_color_red_value).state == 0 && id(oclock_color_green_value).state == 0 && id(oclock_color_blue_value).state == 0;'
+          then:
+            - number.to_max:
+                id: oclock_color_red_value
+            - number.to_max:
+                id: oclock_color_green_value
+            - number.to_max:
+                id: oclock_color_blue_value
+
+light:
+  - id: led_matrix_light
+    platform: neopixelbus
+    type: GRB
+    variant: WS2812X
+    pin: ${gpio_led_strip}
+    num_leds: 114
+    color_correct: [60%, 60%, 60%]
+    internal: true
+
+display:
+  - platform: addressable_light
+    id: led_matrix_display
+    addressable_light_id: led_matrix_light
+    width: $led_matrix_width
+    height: $led_matrix_height
+    rotation: 180°
+    update_interval: 30ms
+    pixel_mapper: |-
+            //Minute LED's that are physically on the first four positions of the LED-Strip are virtually remaped by this function. They are remaped to the 11. row and first four columns. So:
+            //MinuteLED1 is at Position: 1x11
+            //MinuteLED2 is at Position: 2x11
+            //MinuteLED3 is at Position: 3x11
+            //MinuteLED4 is at Position: 4x11
+
+            if (y == 10)
+            {
+              switch (x)
+              {
+                case 0:
+                  return 0;
+                case 1:
+                  return 1;
+                case 2:
+                  return 2;
+                case 3:
+                  return 3;
+                  break;
+              }
+            }            
+            
+            return ((y * $led_matrix_width) + x) + 4;            
+
+    lambda: |-
+          if (id(matrix_test_mode_on).state) 
+          {
+            static int next_update;
+            static int color_id;
+
+            Color red = Color(0xFF0000);
+            Color green = Color(0x00FF00);
+            Color blue = Color(0x0000FF);
+            Color white = Color(0xFFFFFF);
+
+            if (next_update <= millis())
+            {
+              next_update = millis() + 2000;
+              color_id++;
+              id(led_matrix_light).turn_on().set_brightness(0.5).perform();
+            }
+            
+            switch (color_id)
+            {
+              case 1:
+                it.fill(red);
+                break;
+              case 2:
+                it.fill(green);
+                break;
+              case 3:
+                it.fill(blue);
+                break;
+              case 4:
+                it.fill(white);
+                break;
+              default:
+                color_id=1;
+                id(matrix_test_mode_on).turn_off();
+                break;
+            }          
+          }
+          else if (id(display_on_off).state) 
+          {
+            it.set_rotation(id(global_display_rotation));
+
+            // initiate variables
+            static esphome::Color matrix_grid_colors[$led_matrix_width][$led_matrix_height];
+
+            // Estimate time values
+            auto time = id(ds3231_time).now();
+            int second_value = time.second;
+            int minute_value = time.minute;
+            int hour_value = time.hour;
+
+            if (minute_value >= 25) //after 24 minutes the hour-value must be increased by one because after that the time is displayed in relation to the next hour
+              hour_value++;
+
+            if (hour_value >= 12) //to care for 24h mode and calculate it back to 12h mode
+              hour_value = hour_value - 12;
+
+            // Estimate colors
+            esphome::Color itis_color = Color((id(display_brightness).state / 100.0) * id(itis_color_red_value).state, (id(display_brightness).state / 100.0) * id(itis_color_green_value).state, (id(display_brightness).state / 100.0) * id(itis_color_blue_value).state);
+            esphome::Color oclock_color = Color((id(display_brightness).state / 100.0) * id(oclock_color_red_value).state, (id(display_brightness).state / 100.0) * id(oclock_color_green_value).state, (id(display_brightness).state / 100.0) * id(oclock_color_blue_value).state);
+            esphome::Color minute_words_color = Color((id(display_brightness).state / 100.0)*id(minute_words_color_red_value).state, (id(display_brightness).state / 100.0)*id(minute_words_color_green_value).state, (id(display_brightness).state / 100.0)*id(minute_words_color_blue_value).state);
+            esphome::Color minute_points_color = Color((id(display_brightness).state / 100.0)*id(minute_points_color_red_value).state, (id(display_brightness).state / 100.0)*id(minute_points_color_green_value).state, (id(display_brightness).state / 100.0)*id(minute_points_color_blue_value).state);
+            esphome::Color hour_color = Color((id(display_brightness).state / 100.0)*id(hour_number_color_red_value).state, (id(display_brightness).state / 100.0)*id(hour_number_color_green_value).state, (id(display_brightness).state / 100.0)*id(hour_number_color_blue_value).state);
+
+            if (id(show_it_is_enabled).state)
+            {
+              //It is
+              matrix_grid_colors[0][0] = itis_color;
+              matrix_grid_colors[1][0] = itis_color;
+              matrix_grid_colors[3][0] = itis_color;
+              matrix_grid_colors[4][0] = itis_color;
+              matrix_grid_colors[5][0] = itis_color;
+            }
+
+            if (id(show_o_clock_enabled).state && minute_value < 5)
+            {
+              // O'clock
+              matrix_grid_colors[8][9] = oclock_color;
+              matrix_grid_colors[9][9] = oclock_color;
+              matrix_grid_colors[10][9] = oclock_color;
+            }
+
+            switch (hour_value)
+            {
+              case 0:
+                // Twelve
+                matrix_grid_colors[5][4] = hour_color;
+                matrix_grid_colors[6][4] = hour_color;
+                matrix_grid_colors[7][4] = hour_color;
+                matrix_grid_colors[8][4] = hour_color;
+                matrix_grid_colors[9][4] = hour_color;
+                break;
+              case 1:
+                // One
+                matrix_grid_colors[2][5] = hour_color;
+                matrix_grid_colors[3][5] = hour_color;
+                matrix_grid_colors[4][5] = hour_color;
+                matrix_grid_colors[5][5] = hour_color;
+                break;
+              case 2:
+                // Two
+                matrix_grid_colors[0][5] = hour_color;
+                matrix_grid_colors[1][5] = hour_color;
+                matrix_grid_colors[2][5] = hour_color;
+                matrix_grid_colors[3][5] = hour_color;
+                break;
+              case 3:
+                // Three
+                matrix_grid_colors[1][6] = hour_color;
+                matrix_grid_colors[2][6] = hour_color;
+                matrix_grid_colors[3][6] = hour_color;
+                matrix_grid_colors[4][6] = hour_color;
+                break;
+              case 4:
+                // Four
+                matrix_grid_colors[7][7] = hour_color;
+                matrix_grid_colors[8][7] = hour_color;
+                matrix_grid_colors[9][7] = hour_color;
+                matrix_grid_colors[10][7] = hour_color;
+                break;
+              case 5:
+                // Five
+                matrix_grid_colors[7][6] = hour_color;
+                matrix_grid_colors[8][6] = hour_color;
+                matrix_grid_colors[9][6] = hour_color;
+                matrix_grid_colors[10][6] = hour_color;
+                break;
+                break;
+              case 6:
+                // Six
+                matrix_grid_colors[1][9] = hour_color;
+                matrix_grid_colors[2][9] = hour_color;
+                matrix_grid_colors[3][9] = hour_color;
+                matrix_grid_colors[4][9] = hour_color;
+                matrix_grid_colors[5][9] = hour_color;
+                break;
+              case 7:
+                // Seven
+                matrix_grid_colors[5][5] = hour_color;
+                matrix_grid_colors[6][5] = hour_color;
+                matrix_grid_colors[7][5] = hour_color;
+                matrix_grid_colors[8][5] = hour_color;
+                matrix_grid_colors[9][5] = hour_color;
+                matrix_grid_colors[10][5] = hour_color;
+                break;
+              case 8:
+                // Eight
+                matrix_grid_colors[1][8] = hour_color;
+                matrix_grid_colors[2][8] = hour_color;
+                matrix_grid_colors[3][8] = hour_color;
+                matrix_grid_colors[4][8] = hour_color;
+                break;
+              case 9:
+                // Nine
+                matrix_grid_colors[3][7] = hour_color;
+                matrix_grid_colors[4][7] = hour_color;
+                matrix_grid_colors[5][7] = hour_color;
+                matrix_grid_colors[6][7] = hour_color;
+                break;
+              case 10:
+                // Ten
+                matrix_grid_colors[5][8] = hour_color;
+                matrix_grid_colors[6][8] = hour_color;
+                matrix_grid_colors[7][8] = hour_color;
+                matrix_grid_colors[8][8] = hour_color;
+                break;
+              case 11:
+                // Eleven
+                matrix_grid_colors[0][7] = hour_color;
+                matrix_grid_colors[1][7] = hour_color;
+                matrix_grid_colors[2][7] = hour_color;
+                break;
+              case 12:
+                // Twelve
+                matrix_grid_colors[5][4] = hour_color;
+                matrix_grid_colors[6][4] = hour_color;
+                matrix_grid_colors[7][4] = hour_color;
+                matrix_grid_colors[8][4] = hour_color;
+                matrix_grid_colors[9][4] = hour_color;
+                break;
+              default:
+                break;
+            }
+
+            switch (minute_value)
+            {
+              case 5 ... 9:
+                // FIVE_FIRSTONE
+                matrix_grid_colors[7][0] = minute_words_color;
+                matrix_grid_colors[8][0] = minute_words_color;
+                matrix_grid_colors[9][0] = minute_words_color;
+                matrix_grid_colors[10][0] = minute_words_color;
+
+                // AFTER
+                matrix_grid_colors[2][3] = minute_words_color;
+                matrix_grid_colors[3][3] = minute_words_color;
+                matrix_grid_colors[4][3] = minute_words_color;
+                matrix_grid_colors[5][3] = minute_words_color;
+                break;
+              case 10 ... 14:
+                // TEN_FIRSTONE
+                matrix_grid_colors[0][1] = minute_words_color;
+                matrix_grid_colors[1][1] = minute_words_color;
+                matrix_grid_colors[2][1] = minute_words_color;
+                matrix_grid_colors[3][1] = minute_words_color;
+
+                // AFTER
+                matrix_grid_colors[2][3] = minute_words_color;
+                matrix_grid_colors[3][3] = minute_words_color;
+                matrix_grid_colors[4][3] = minute_words_color;
+                matrix_grid_colors[5][3] = minute_words_color;
+                break;
+              case 15 ... 19:
+                // QUARTER
+                matrix_grid_colors[4][2] = minute_words_color;
+                matrix_grid_colors[5][2] = minute_words_color;
+                matrix_grid_colors[6][2] = minute_words_color;
+                matrix_grid_colors[7][2] = minute_words_color;
+                matrix_grid_colors[8][2] = minute_words_color;
+                matrix_grid_colors[9][2] = minute_words_color;
+                matrix_grid_colors[10][2] = minute_words_color;
+
+                // AFTER
+                matrix_grid_colors[2][3] = minute_words_color;
+                matrix_grid_colors[3][3] = minute_words_color;
+                matrix_grid_colors[4][3] = minute_words_color;
+                matrix_grid_colors[5][3] = minute_words_color;
+                break;
+              case 20 ... 24:
+                // TWENTY_FIRSTONE
+                matrix_grid_colors[4][1] = minute_words_color;
+                matrix_grid_colors[5][1] = minute_words_color;
+                matrix_grid_colors[6][1] = minute_words_color;
+                matrix_grid_colors[7][1] = minute_words_color;
+                matrix_grid_colors[8][1] = minute_words_color;
+                matrix_grid_colors[9][1] = minute_words_color;
+                matrix_grid_colors[10][1] = minute_words_color;
+
+                // AFTER
+                matrix_grid_colors[2][3] = minute_words_color;
+                matrix_grid_colors[3][3] = minute_words_color;
+                matrix_grid_colors[4][3] = minute_words_color;
+                matrix_grid_colors[5][3] = minute_words_color;
+                break;
+              case 25 ... 29:
+                // FIVE_FIRSTONE
+                matrix_grid_colors[7][0] = minute_words_color;
+                matrix_grid_colors[8][0] = minute_words_color;
+                matrix_grid_colors[9][0] = minute_words_color;
+                matrix_grid_colors[10][0] = minute_words_color;
+
+                // BEFORE
+                matrix_grid_colors[6][3] = minute_words_color;
+                matrix_grid_colors[7][3] = minute_words_color;
+                matrix_grid_colors[8][3] = minute_words_color;
+
+                // HALF
+                matrix_grid_colors[0][4] = minute_words_color;
+                matrix_grid_colors[1][4] = minute_words_color;
+                matrix_grid_colors[2][4] = minute_words_color;
+                matrix_grid_colors[3][4] = minute_words_color;
+
+                break;
+              case 30 ... 34:
+                // HALF
+                matrix_grid_colors[0][4] = minute_words_color;
+                matrix_grid_colors[1][4] = minute_words_color;
+                matrix_grid_colors[2][4] = minute_words_color;
+                matrix_grid_colors[3][4] = minute_words_color;
+
+                break;
+              case 35 ... 39:
+                // FIVE_FIRSTONE
+                matrix_grid_colors[7][0] = minute_words_color;
+                matrix_grid_colors[8][0] = minute_words_color;
+                matrix_grid_colors[9][0] = minute_words_color;
+                matrix_grid_colors[10][0] = minute_words_color;
+
+                // AFTER
+                matrix_grid_colors[2][3] = minute_words_color;
+                matrix_grid_colors[3][3] = minute_words_color;
+                matrix_grid_colors[4][3] = minute_words_color;
+                matrix_grid_colors[5][3] = minute_words_color;
+                
+                // HALF
+                matrix_grid_colors[0][4] = minute_words_color;
+                matrix_grid_colors[1][4] = minute_words_color;
+                matrix_grid_colors[2][4] = minute_words_color;
+                matrix_grid_colors[3][4] = minute_words_color;
+                break;
+              case 40 ... 44:
+                // TWENTY_FIRSTONE
+                matrix_grid_colors[4][1] = minute_words_color;
+                matrix_grid_colors[5][1] = minute_words_color;
+                matrix_grid_colors[6][1] = minute_words_color;
+                matrix_grid_colors[7][1] = minute_words_color;
+                matrix_grid_colors[8][1] = minute_words_color;
+                matrix_grid_colors[9][1] = minute_words_color;
+                matrix_grid_colors[10][1] = minute_words_color;
+
+                // BEFORE
+                matrix_grid_colors[6][3] = minute_words_color;
+                matrix_grid_colors[7][3] = minute_words_color;
+                matrix_grid_colors[8][3] = minute_words_color;
+                break;
+              case 45 ... 49:
+                // QUARTER
+                matrix_grid_colors[4][2] = minute_words_color;
+                matrix_grid_colors[5][2] = minute_words_color;
+                matrix_grid_colors[6][2] = minute_words_color;
+                matrix_grid_colors[7][2] = minute_words_color;
+                matrix_grid_colors[8][2] = minute_words_color;
+                matrix_grid_colors[9][2] = minute_words_color;
+                matrix_grid_colors[10][2] = minute_words_color;
+
+                // BEFORE
+                matrix_grid_colors[6][3] = minute_words_color;
+                matrix_grid_colors[7][3] = minute_words_color;
+                matrix_grid_colors[8][3] = minute_words_color;
+                break;
+              case 50 ... 54:
+                // TEN_FIRSTONE
+                matrix_grid_colors[0][1] = minute_words_color;
+                matrix_grid_colors[1][1] = minute_words_color;
+                matrix_grid_colors[2][1] = minute_words_color;
+                matrix_grid_colors[3][1] = minute_words_color;
+
+                // BEFORE
+                matrix_grid_colors[6][3] = minute_words_color;
+                matrix_grid_colors[7][3] = minute_words_color;
+                matrix_grid_colors[8][3] = minute_words_color;
+                break;
+              case 55 ... 59:
+                // FIVE_FIRSTONE
+                matrix_grid_colors[7][0] = minute_words_color;
+                matrix_grid_colors[8][0] = minute_words_color;
+                matrix_grid_colors[9][0] = minute_words_color;
+                matrix_grid_colors[10][0] = minute_words_color;
+
+                // BEFORE
+                matrix_grid_colors[6][3] = minute_words_color;
+                matrix_grid_colors[7][3] = minute_words_color;
+                matrix_grid_colors[8][3] = minute_words_color;
+              default:
+                break;
+            }
+
+            switch (minute_value % 5)
+            {
+              case 4:
+                matrix_grid_colors[0][10] = minute_points_color;
+              case 3:
+                matrix_grid_colors[1][10] = minute_points_color;
+              case 2:
+                matrix_grid_colors[2][10] = minute_points_color;
+              case 1:
+                matrix_grid_colors[3][10] = minute_points_color;
+                break;
+              default:
+                break;
+            }
+
+            // fade out old colors
+            if (id(indicator_fade_off_enabled).state)
+            {
+              for (int y_pos = 0; y_pos < $led_matrix_height; y_pos++) 
+              {
+                for (int x_pos = 0; x_pos < $led_matrix_width; x_pos++) 
+                {
+                  esphome::Color old_color = matrix_grid_colors[x_pos][y_pos];
+                  
+                  // fade out color
+                  int red = old_color.red;
+                  int green = old_color.green;
+                  int blue = old_color.blue;
+                  int white = old_color.white;
+
+                  red = (red < (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ) ? 0 : red - (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ;
+                  green = (green < (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ) ? 0 : green - (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ;
+                  blue = (blue < (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ) ? 0 : blue - (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ;
+                  white = (white < (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ) ? 0 : white - (id(indicator_fade_out_step_size).state / 100.0) * 15.0 ;
+
+                  esphome::Color new_color = Color(red, green, blue, white);
+                  matrix_grid_colors[x_pos][y_pos] = new_color;
+                }
+              }
+            } 
+            
+            // In case that the indicator fade off is deactivated we need to clear the color array to delete old color values
+
+            if (!id(indicator_fade_off_enabled).state)          
+            {
+              for (int y_pos = 0; y_pos < $led_matrix_height; y_pos++) 
+              {
+                for (int x_pos = 0; x_pos < $led_matrix_width; x_pos++) 
+                {
+                  matrix_grid_colors[x_pos][y_pos] = Color::BLACK;
+                }
+              }
+            }
+
+            // Write prepared color array to physical led matrix
+
+            for (int y_pos = 0; y_pos < $led_matrix_height; y_pos++) 
+            {
+              for (int x_pos = 0; x_pos < $led_matrix_width; x_pos++) 
+              {
+                it.draw_pixel_at(x_pos, y_pos, matrix_grid_colors[x_pos][y_pos]);
+              }
+            }
+            
+          } else 
+          {
+            it.fill(COLOR_OFF);
+          }
+    
+    
+    
