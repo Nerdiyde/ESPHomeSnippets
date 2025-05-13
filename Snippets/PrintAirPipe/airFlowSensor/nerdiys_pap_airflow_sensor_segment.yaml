@@ -1,0 +1,281 @@
+#                                  _   _                 _  _               _
+#                                 | \ | |               | |(_)             | |
+#  __      ____      ____      __ |  \| |  ___  _ __  __| | _  _   _     __| |  ___
+#  \ \ /\ / /\ \ /\ / /\ \ /\ / / | . ` | / _ \| '__|/ _` || || | | |   / _` | / _ \
+#   \ V  V /  \ V  V /  \ V  V /_ | |\  ||  __/| |  | (_| || || |_| | _| (_| ||  __/
+#    \_/\_/    \_/\_/    \_/\_/(_)|_| \_| \___||_|   \__,_||_| \__, |(_)\__,_| \___|
+#                                                               __/ |
+#                                                              |___/
+#     Infos on https://www.Nerdiy.de/
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.#
+#     You can find additional infos about the licensing here: https://nerdiy.de/en/lizenz/
+#
+
+substitutions:
+  name: "nerdiys-airflow-sensor"
+  friendly_name: "NerdDIYs PrintAirPipe AirFlowSensor"
+
+  # security relevant definitions
+  # web_user: "NRDY"    # uncomment to activate user/password protection for webserver
+  # web_password: "please_change_me"    # uncomment to activate user/password protection for webserver
+  # ota_password: "please_change_me"    # uncomment to activate password protection for OTA
+  http_request_ssl_verification: "False"
+
+  # GPIO pin definitions
+  gpio_led_strip: "GPIO16"
+  gpio_servo_control: "GPIO21"
+
+  # Other definitions
+  log_level: "INFO"    # If you deactivate this it also deactivates the improv_serial option. See here for more info: https://esphome.io/components/improv_serial
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  min_version: "2024.10.0"
+
+  project:
+    name: nerdiy.printairpipe_airflow_sensor
+    version: "1.0.0"
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: "${log_level}"
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+    # password: "${ota_password}"    # uncomment to activate password protection for OTA
+  - platform: http_request
+    id: ota_http_request
+
+http_request:
+  verify_ssl: "${http_request_ssl_verification}"
+
+dashboard_import:
+  p  ackage_import_url: github://Nerdiyde/ESPHomeSnippets/blob/main/Snippets/selfIY_ring/nerdiys-selfiy-ring.yaml@main
+  import_full_config: true
+
+wifi:
+  ap:
+
+captive_portal:
+
+improv_serial:
+
+esp32_improv:
+  authorizer: none
+    
+web_server:
+  port: 80
+  version: 3
+  id: web_server_standard
+  # auth:    # uncomment to activate user/password protection for webserver
+    # username: "${web_user}"    # uncomment to activate user/password protection for webserver
+    # password: "${web_password}"    # uncomment to activate user/password protection for webserver
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(id(valve_position_direct_control_number).state / 100.0), (id(valve_position_direct_control_number).state / 100.0), 0.0).perform();
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+    id: esphome_version_sensor_id
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+      id: esp_ip_address_id
+    ssid:
+      name: ESP Connected SSID
+      id: esp_connected_ssid_id
+    bssid:
+      name: ESP Connected BSSID
+      id: esp_connected_bssid_id
+    mac_address:
+      name: ESP Mac Wifi Address
+      id: esp_mac_wifi_address_id
+
+globals:
+  - id: pulses_at_max_speed  # this value is estimated by expererience. Adapt if needed.
+    type: float
+    restore_value: no
+    initial_value: '20.0'
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+    entity_category: "diagnostic"
+    id: uptime_sensor_id
+
+  - platform: pulse_meter
+    id: flow_meter_pulse_rate
+    pin: 
+      number: GPIO10
+      inverted: true
+      mode: INPUT_PULLUP
+    unit_of_measurement: 'pulses/s'
+    name: 'Flow Meter impulse rate'
+    internal_filter: 10ms
+    accuracy_decimals: 0
+    internal_filter_mode: EDGE
+    timeout: 2s  
+    filters:
+      - lambda: return x / 60.0;
+    on_value:
+      then:
+        - if:
+            condition:
+              switch.is_on: control_anim_by_flow_speed_switch
+            then:
+              - number.set:
+                  id: animation_speed
+                  value: !lambda 'return (x/id(pulses_at_max_speed)) * 100.0;'
+
+  - platform: template
+    name: "Flow meter wheel speed"
+    id: "flow_meter_wheel_speed"
+    update_interval: 1s
+    accuracy_decimals: 1
+    unit_of_measurement: 'rounds/s'
+    lambda: |-
+        float rps = id(flow_meter_pulse_rate).state / 3.0;
+        return rps;    
+
+switch:
+  - platform: template
+    name: "Light on/off"
+    id: light_on_off_switch
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - light.turn_on: 
+          id: light_1
+          effect: "Running light"
+    turn_off_action:
+      - light.turn_off: light_1
+
+  - platform: template
+    name: "Control led animation by flow speed"
+    id: control_anim_by_flow_speed_switch
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON
+    disabled_by_default: True
+
+button:
+  - platform: restart
+    name: "Restart ESP"
+    id: restart_button_id
+
+number:
+  - platform: template
+    name: "Animation speed"
+    id: animation_speed
+    max_value: 100
+    min_value: 0
+    step: 1
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    disabled_by_default: True
+    mode: slider
+
+  - platform: template
+    name: "Light brightness"
+    id: light_brightness
+    max_value: 100
+    min_value: 15
+    step: 1
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    mode: slider
+    
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_ON
+    id: light_1
+    type: GRB
+    variant: WS2812
+    pin: GPIO09
+    num_leds: 3
+    name: "LEDs"
+    internal: true
+    effects:
+      - addressable_lambda:
+          name: "Running light"
+          update_interval: 16ms
+          lambda: |-
+            if (initial_run) 
+            {
+              it.all() = Color::BLACK;
+            }
+
+            static int next_update;
+            static int pos;
+
+            if (next_update<=millis() && id(animation_speed).state > 0)
+            {
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color::BLACK;
+
+              for (int i = 0; i < it.size(); i++)
+              {
+                //float brightness = map(abs(pos - i), 0, it.size() - 1, 0.0, 1.0);
+                float brightness = i == pos ? (id(light_brightness).state / 100.0) : 0.0;
+
+                it[i] = Color(brightness * red, brightness * green, brightness * blue);
+
+              }
+
+              pos = (pos + 1) % it.size();
+
+              next_update= millis() + 1635 - (id(animation_speed).state/100.0)*1500; // this limits the update interval to a range of 135ms to 1635ms
+            } else if (id(animation_speed).state == 0)
+            {
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+              float brightness = id(light_brightness).state / 100.0;
+              it.all() = Color(brightness * red, brightness * green, brightness * blue);
+            }

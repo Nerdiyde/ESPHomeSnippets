@@ -1,0 +1,294 @@
+#                                  _   _                 _  _               _
+#                                 | \ | |               | |(_)             | |
+#  __      ____      ____      __ |  \| |  ___  _ __  __| | _  _   _     __| |  ___
+#  \ \ /\ / /\ \ /\ / /\ \ /\ / / | . ` | / _ \| '__|/ _` || || | | |   / _` | / _ \
+#   \ V  V /  \ V  V /  \ V  V /_ | |\  ||  __/| |  | (_| || || |_| | _| (_| ||  __/
+#    \_/\_/    \_/\_/    \_/\_/(_)|_| \_| \___||_|   \__,_||_| \__, |(_)\__,_| \___|
+#                                                               __/ |
+#                                                              |___/
+#     Infos on https://www.Nerdiy.de/
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.#
+#     You can find additional infos about the licensing here: https://nerdiy.de/en/lizenz/
+#
+
+substitutions:
+  name: "nerdiys-butterfly_valve"
+  friendly_name: "NerdDIYs PrintAirPipe Butterfly valve"
+
+  # security relevant definitions
+  # web_user: "NRDY"    # uncomment to activate user/password protection for webserver
+  # web_password: "please_change_me"    # uncomment to activate user/password protection for webserver
+  # ota_password: "please_change_me"    # uncomment to activate password protection for OTA
+  http_request_ssl_verification: "False"
+
+  # GPIO pin definitions
+  gpio_led_strip: "GPIO16"
+  gpio_touch_sensor: "GPIO33"
+  gpio_servo_control: "GPIO21"
+
+  # Other definitions
+  log_level: "INFO"    # If you deactivate this it also deactivates the improv_serial option. See here for more info: https://esphome.io/components/improv_serial
+  touch_sensors_setup_mode: "False"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  min_version: "2024.10.0"
+
+  project:
+    name: nerdiy.printairpipe_butterfly_valve
+    version: "1.0.0"
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: "${log_level}"
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+    # password: "${ota_password}"    # uncomment to activate password protection for OTA
+  - platform: http_request
+    id: ota_http_request
+
+http_request:
+  verify_ssl: "${http_request_ssl_verification}"
+
+dashboard_import:
+  p  ackage_import_url: github://Nerdiyde/ESPHomeSnippets/blob/main/Snippets/selfIY_ring/nerdiys-selfiy-ring.yaml@main
+  import_full_config: true
+
+wifi:
+  ap:
+
+captive_portal:
+
+esp32_touch:
+  setup_mode: "${touch_sensors_setup_mode}"
+  # measurement_duration: 0.25ms   # uncomment if esp32s3 is used
+  id: esp32_touch_sensor
+
+improv_serial:
+
+esp32_improv:
+  authorizer: none
+    
+web_server:
+  port: 80
+  version: 3
+  id: web_server_standard
+  # auth:    # uncomment to activate user/password protection for webserver
+    # username: "${web_user}"    # uncomment to activate user/password protection for webserver
+    # password: "${web_password}"    # uncomment to activate user/password protection for webserver
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(id(valve_position_direct_control_number).state / 100.0), (id(valve_position_direct_control_number).state / 100.0), 0.0).perform();
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+    id: esphome_version_sensor_id
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+      id: esp_ip_address_id
+    ssid:
+      name: ESP Connected SSID
+      id: esp_connected_ssid_id
+    bssid:
+      name: ESP Connected BSSID
+      id: esp_connected_bssid_id
+    mac_address:
+      name: ESP Mac Wifi Address
+      id: esp_mac_wifi_address_id
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+    entity_category: "diagnostic"
+    id: uptime_sensor_id
+
+button:
+  - platform: restart
+    name: "Restart ESP"
+    id: restart_button_id
+
+  - platform: template
+    name: Close valve
+    id: close_valve_button
+    on_press:
+      then:
+        - servo.write:
+            id: valve_servo
+            level: !lambda 'return id(valve_closed_position).state;'
+        - number.set:
+            id: valve_position_direct_control_number
+            value: !lambda 'return id(valve_closed_position).state;'
+
+  - platform: template
+    name: Open valve
+    id: open_valve_button
+    on_press:
+      then:
+        - servo.write:
+            id: valve_servo
+            level: !lambda 'return id(valve_opened_position).state;'
+        - number.set:
+            id: valve_position_direct_control_number
+            value: !lambda 'return id(valve_opened_position).state;'
+
+  - platform: template
+    name: Toggle lid
+    id: toggle_lid_button
+    on_press:
+      then:
+        - lambda: |-
+           if (id(valve_position_direct_control_number).state >= 50)
+           {
+            id(close_valve_button).press(); 
+           } else 
+           {
+            id(open_valve_button).press();
+           }
+
+  - platform: template
+    name: "Start longterm test"
+    id: button_start_longterm_test
+    on_press:
+      then:
+        - script.execute: perform_longterm_test
+
+output:
+  - platform: ledc
+    id: valve_servo_pwm_output
+    pin: ${gpio_servo_control}
+    frequency: 50 Hz
+
+servo:
+  - id: valve_servo
+    output: valve_servo_pwm_output
+
+number:
+  - platform: template
+    name: "Test repititions"
+    id: number_of_test_repititions
+    max_value: 100
+    min_value: 0
+    step: 1
+    initial_value: 5
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: Valve servo direct control    
+    id: valve_position_direct_control_number
+    min_value: 0
+    initial_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    set_action:
+      then:
+        - servo.write:
+            id: valve_servo
+            level: !lambda 'return x / 100.0;'
+        - lambda: id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(x / 100.0), (x / 100.0), 0.0).perform();
+
+  - platform: template
+    name: Valve Open position
+    id: valve_opened_position
+    min_value: 0
+    initial_value: 100
+    max_value: 100
+    step: 1
+    optimistic: true
+    mode: box
+
+  - platform: template
+    name: Valve Closed position
+    id: valve_closed_position
+    min_value: 0
+    initial_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    mode: box
+
+binary_sensor:
+    
+  - platform: esp32_touch
+    name: "Touch sensor"
+    pin: ${gpio_touch_sensor}
+    threshold: 400
+    on_press:
+      then:
+        - lambda: |-
+           if (id(valve_position_direct_control_number).state >= 50)
+           {
+            id(close_valve_button).press(); 
+           } else 
+           {
+            id(open_valve_button).press();
+           }
+
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_OFF
+    id: status_led
+    type: GRB
+    variant: WS2812
+    pin: ${gpio_led_strip}
+    num_leds: 1
+    internal: true
+    default_transition_length: 250ms
+
+script:
+
+  - id: perform_longterm_test
+    mode: single
+    then:  
+      - repeat:
+          count: !lambda return id(number_of_test_repititions).state;
+          then:
+            - button.press: close_valve_button
+            - delay: 1s
+            - button.press: open_valve_button
+            - delay: 1s

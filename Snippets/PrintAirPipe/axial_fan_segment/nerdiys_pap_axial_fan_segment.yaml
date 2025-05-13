@@ -1,0 +1,404 @@
+#                                  _   _                 _  _               _
+#                                 | \ | |               | |(_)             | |
+#  __      ____      ____      __ |  \| |  ___  _ __  __| | _  _   _     __| |  ___
+#  \ \ /\ / /\ \ /\ / /\ \ /\ / / | . ` | / _ \| '__|/ _` || || | | |   / _` | / _ \
+#   \ V  V /  \ V  V /  \ V  V /_ | |\  ||  __/| |  | (_| || || |_| | _| (_| ||  __/
+#    \_/\_/    \_/\_/    \_/\_/(_)|_| \_| \___||_|   \__,_||_| \__, |(_)\__,_| \___|
+#                                                               __/ |
+#                                                              |___/
+#     Infos on https://www.Nerdiy.de/
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.#
+#     You can find additional infos about the licensing here: https://nerdiy.de/en/lizenz/
+#
+
+substitutions:
+  name: "nerdiys-fan-segment"
+  friendly_name: "NerdDIYs PrintAirPipe Axial Fan segment"
+
+  # security relevant definitions
+  # web_user: "NRDY"    # uncomment to activate user/password protection for webserver
+  # web_password: "please_change_me"    # uncomment to activate user/password protection for webserver
+  # ota_password: "please_change_me"    # uncomment to activate password protection for OTA
+  http_request_ssl_verification: "False"
+
+  # GPIO pin definitions
+  gpio_led_strip: "GPIO16"
+  gpio_touch_sensor: "GPIO01"
+  gpio_servo_control: "GPIO21"
+
+  # Other definitions
+  log_level: "INFO"    # If you deactivate this it also deactivates the improv_serial option. See here for more info: https://esphome.io/components/improv_serial
+  touch_sensors_setup_mode: "False"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  min_version: "2024.10.0"
+
+  project:
+    name: nerdiy.printairpipe_axial_fan_segment
+    version: "1.0.0"
+
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          auto call_light = id(light_1).turn_on();
+          call_light.set_effect("slow_pulse");
+          call_light.set_brightness(id(light_brightness).state / 100.0);
+          call_light.perform();
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: "${log_level}"
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+    # password: "${ota_password}"    # uncomment to activate password protection for OTA
+  - platform: http_request
+    id: ota_http_request
+
+http_request:
+  verify_ssl: "${http_request_ssl_verification}"
+
+dashboard_import:
+  p  ackage_import_url: github://Nerdiyde/ESPHomeSnippets/blob/main/Snippets/selfIY_ring/nerdiys-selfiy-ring.yaml@main
+  import_full_config: true
+
+wifi:
+  ap:
+
+captive_portal:
+
+esp32_touch:
+  setup_mode: "${touch_sensors_setup_mode}"
+  # measurement_duration: 0.25ms   # uncomment if esp32s3 is used
+  id: esp32_touch_sensor
+
+improv_serial:
+
+esp32_improv:
+  authorizer: none
+    
+web_server:
+  port: 80
+  version: 3
+  id: web_server_standard
+  # auth:    # uncomment to activate user/password protection for webserver
+    # username: "${web_user}"    # uncomment to activate user/password protection for webserver
+    # password: "${web_password}"    # uncomment to activate user/password protection for webserver
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(status_led).turn_on().set_brightness(1.0).set_rgb(1.0-(id(valve_position_direct_control_number).state / 100.0), (id(valve_position_direct_control_number).state / 100.0), 0.0).perform();
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+    id: esphome_version_sensor_id
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+      id: esp_ip_address_id
+    ssid:
+      name: ESP Connected SSID
+      id: esp_connected_ssid_id
+    bssid:
+      name: ESP Connected BSSID
+      id: esp_connected_bssid_id
+    mac_address:
+      name: ESP Mac Wifi Address
+      id: esp_mac_wifi_address_id
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+    entity_category: "diagnostic"
+    id: uptime_sensor_id
+
+# Reports RPM by pulse_counter
+  - platform: pulse_counter
+    pin: GPIO03
+    name: Fan Speed 1
+    id: speed_signal_fan_1
+    unit_of_measurement: 'RPM'
+    filters:
+      - lambda: |-
+          return (x*0.5);
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: DISABLE
+    update_interval: 10s
+
+select:
+
+  - platform: template
+    name: "Fan speed"
+    id: fan_speed_select
+    disabled_by_default: True
+    options:
+      - "Off"
+      - "35%"
+      - "65%"
+      - "100%"
+    initial_option: "Off"
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+             format: "Chosen option: %s "
+             args: ["x.c_str()"]
+        - lambda: |-   
+            auto index = id(fan_speed_select).active_index();     
+            ESP_LOGI("main", "Option at index %d is active", index.value());
+            if (index.value() == 0)
+            {
+              auto call = id(fan_1).turn_off();
+              call.perform();
+            } else if (index.value() == 1)
+            {  
+              auto call = id(fan_1).turn_on();
+              call.set_speed(35);
+              call.perform();
+            }  else if (index.value() == 2)
+            {  
+              auto call = id(fan_1).turn_on();
+              call.set_speed(65);
+              call.perform();
+            } else if (index.value() == 3)
+            {  
+              auto call = id(fan_1).turn_on();
+              call.set_speed(100);
+              call.perform();
+            }
+
+button:
+  - platform: restart
+    name: "Restart ESP"
+    id: restart_button_id
+
+binary_sensor:
+    
+  - platform: esp32_touch
+    name: "Touch sensor"
+    pin: GPIO01
+    threshold: 500000
+    on_press:
+      then:
+        - select.next:
+            id: fan_speed_select
+            cycle: True
+    filters:
+      - delayed_on: 50ms
+
+output:
+  - platform: gpio
+    pin: GPIO02
+    id: power_supply_pin_fan_1
+
+  - platform: ledc
+    pin: GPIO04
+    frequency: 25000 Hz
+    id: pwm_to_fan_signal_1
+
+fan:
+  - platform: speed
+    output: pwm_to_fan_signal_1
+    name: "Fan"
+    id: fan_1
+    on_turn_on:
+      - output.turn_on: power_supply_pin_fan_1
+
+    on_turn_off:
+      - output.turn_off: power_supply_pin_fan_1
+      - delay: 1s
+      - output.set_level:
+          id: pwm_to_fan_signal_1
+          level: 100%
+      - lambda: |-  
+          if (id(light_on_off_switch).state)
+          {
+            auto call_light = id(light_1).turn_on();
+            call_light.set_effect("slow_pulse");
+            call_light.set_brightness(id(light_brightness).state / 100.0);
+            call_light.perform();
+          }
+
+    on_speed_set:
+      - lambda: |-
+          if (id(light_on_off_switch).state)
+          {
+            if (x > 0 && x < 65)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 1");  
+              call_light.set_brightness(id(light_brightness).state / 100.0);            
+              call_light.perform();
+            }  else if (x >= 65 && x < 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 2");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            } else if (x == 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 3");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            }
+          }
+
+switch:
+  - platform: template
+    name: "Light on/off"
+    id: light_on_off_switch
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON
+    disabled_by_default: True
+    on_turn_off: 
+      then:
+        - lambda:
+            auto call_light = id(light_1).turn_off();
+            call_light.perform();
+    on_turn_on: 
+      then:
+        - lambda:
+            int speed = id(fan_1).speed;
+            if (speed > 0 && speed < 65)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 1");  
+              call_light.set_brightness(id(light_brightness).state / 100.0);            
+              call_light.perform();
+            }  else if (speed >= 65 && speed < 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 2");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            } else if (speed == 100)
+            {  
+              auto call_light = id(light_1).turn_on();
+              call_light.set_effect("Fan speed 3");
+              call_light.set_brightness(id(light_brightness).state / 100.0);
+              call_light.perform();
+            }
+
+number:
+
+  - platform: template
+    name: "Light brightness"
+    id: light_brightness
+    max_value: 100
+    min_value: 35
+    initial_value: 50
+    step: 1
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    mode: slider
+    set_action:
+      then:
+        - lambda: |-
+            auto call = id(light_1).turn_on();
+            call.set_brightness(x / 100.0);
+            call.perform();
+
+light:
+  - platform: neopixelbus
+    restore_mode: ALWAYS_OFF
+    id: light_1
+    type: GRB
+    variant: WS2812
+    pin: GPIO07
+    num_leds: 3
+    name: "LEDs"
+    internal: true
+    default_transition_length: 250ms
+    effects:
+      - pulse:
+          name: pulse
+          transition_length: 250ms
+          update_interval: 250ms
+      - pulse:
+          name: slow_pulse
+          transition_length:
+            on_length: 250ms
+            off_length: 2000ms
+          update_interval: 2250ms
+          max_brightness: 50%
+      - addressable_lambda:
+          name: "Fan speed 1"
+          update_interval: 16ms
+          lambda: |-
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color::BLACK;
+
+              it[0] = Color(red, green, blue);
+      - addressable_lambda:
+          name: "Fan speed 2"
+          update_interval: 16ms
+          lambda: |-
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color::BLACK;
+
+              it[0] = Color(red, green, blue);
+              it[1] = Color(red, green, blue);
+              
+      - addressable_lambda:
+          name: "Fan speed 3"
+          update_interval: 16ms
+          lambda: |-
+
+              int red = current_color.red;
+              int green = current_color.green;
+              int blue = current_color.blue;
+
+              it.all() = Color(red, green, blue);

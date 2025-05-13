@@ -1,0 +1,600 @@
+#                                  _   _                 _  _               _
+#                                 | \ | |               | |(_)             | |
+#  __      ____      ____      __ |  \| |  ___  _ __  __| | _  _   _     __| |  ___
+#  \ \ /\ / /\ \ /\ / /\ \ /\ / / | . ` | / _ \| '__|/ _` || || | | |   / _` | / _ \
+#   \ V  V /  \ V  V /  \ V  V /_ | |\  ||  __/| |  | (_| || || |_| | _| (_| ||  __/
+#    \_/\_/    \_/\_/    \_/\_/(_)|_| \_| \___||_|   \__,_||_| \__, |(_)\__,_| \___|
+#                                                               __/ |
+#                                                              |___/
+#     Infos on https://www.Nerdiy.de/
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.#
+#     You can find additional infos about the licensing here: https://nerdiy.de/en/lizenz/
+#
+
+substitutions:
+  name: "nerdiys-pb-16x16-tile"
+  friendly_name: "NerdDIYs PxlBlck 16x16_tile"
+
+  # security relevant definitions
+  #improv_password: "please_change_me"
+  #ap_password: "please_change_me"
+  #web_user: "NRDY"
+  #web_password: "please_change_me"
+  #ota_password: "please_change_me"
+  #http_request_ssl_verification: "False"
+
+  # GPIO pin definitions
+  gpio_led_strip: "GPIO9"
+  gpio_sda: "GPIO5"
+  gpio_scl: "GPIO6"
+
+  # Other definitions
+  log_level: "DEBUG"    # If you deactivate this it also deactivates the improv_serial option. See here for more info: https://esphome.io/components/improv_serial
+  led_matrix_width: "16"
+  led_matrix_height: "16"
+  led_matrix_count: "256"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  min_version: "2024.10.0"
+
+  project:
+    name: nerdiy.pxlBlck16x16_tile
+    version: "1.0.0"
+
+
+  on_boot:
+    priority: -100
+    then:
+        # this is done to relead the previous setting of the rotation select component
+      - lambda: |-
+          auto call = id(display_rotation_select).make_call();
+          switch (id(global_display_rotation)) {
+            case DISPLAY_ROTATION_0_DEGREES: 
+              call.set_option("0°");
+              call.perform();
+              break;
+            case DISPLAY_ROTATION_90_DEGREES: 
+              call.set_option("90°");
+              call.perform();
+              break;
+            case DISPLAY_ROTATION_180_DEGREES: 
+              call.set_option("180°");
+              call.perform();
+              break;     
+            case DISPLAY_ROTATION_270_DEGREES: 
+              call.set_option("270°");
+              call.perform();
+              break;       
+            default:
+              call.set_option("0°");
+              call.perform();
+          }
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: "${log_level}"
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+#    password: "${ota_password}"  
+#  - platform: http_request
+#    id: ota_http_request
+
+#http_request:
+#  verify_ssl: "${http_request_ssl_verification}"
+
+dashboard_import:
+  package_import_url: github://Nerdiyde/ESPHomeSnippets/blob/main/Snippets/pxlBlck_16x16_tile/nerdiys-pxlBlck-16x16-tile.yaml
+  import_full_config: false
+
+wifi:
+  ap:
+#    password: "${ap_password}" 
+
+captive_portal:
+
+improv_serial:
+  next_url: http://{{ip_address}}
+
+esp32_improv:
+  authorizer: none
+  #password: "${improv_password}"
+
+web_server:
+  version: 3
+#  local: true
+  port: 80
+#  auth:
+#    username: "${web_user}"
+#    password: "${web_password}"
+
+i2c:
+  sda: ${gpio_sda}
+  scl: ${gpio_scl}
+  scan: true
+  id: i2c_main
+
+bme68x_bsec2_i2c:
+  address: 0x77
+  id: bme680_internal
+  i2c_id: i2c_main
+  model: BME680
+  operating_age: 4d
+  sample_rate: lp
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+    servers:
+     - 0.pool.ntp.org
+     - 1.pool.ntp.org
+     - 2.pool.ntp.org
+  - platform: homeassistant
+    id: homeassistant_time
+    on_time_sync:
+      then:
+      - logger.log: "Synchronized system clock"
+    
+font:
+  - file: 'fonts/comic.ttf'
+    id: font_comic_1
+    size: 1
+  - file: 'fonts/dot_digital-7.ttf'
+    id: font_dotmatrix_1
+    size: 10
+
+interval:
+  - interval: 1000ms
+    then:
+      - lambda: |-
+          id(perform_auto_brightness_adjustment).execute();
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+  
+  - platform: bme68x_bsec2
+    iaq_accuracy:
+      # IAQ accuracy as a text value of Stabilizing, Uncertain, Calibrating, Calibrated
+      name: "BME680 IAQ Accuracy"
+
+  - platform: template
+    name: "BME680 IAQ Classification"
+    icon: "mdi:checkbox-marked-circle-outline"
+    lambda: |-
+      if ( int(id(iaq).state) <= 50) {
+        return {"Excellent"};
+      }
+      else if (int(id(iaq).state) >= 51 && int(id(iaq).state) <= 100) {
+        return {"Good"};
+      }
+      else if (int(id(iaq).state) >= 101 && int(id(iaq).state) <= 150) {
+        return {"Lightly polluted"};
+      }
+      else if (int(id(iaq).state) >= 151 && int(id(iaq).state) <= 200) {
+        return {"Moderately polluted"};
+      }
+      else if (int(id(iaq).state) >= 201 && int(id(iaq).state) <= 250) {
+        return {"Heavily polluted"};
+      }
+      else if (int(id(iaq).state) >= 251 && int(id(iaq).state) <= 350) {
+        return {"Severely polluted"};
+      }
+      else if (int(id(iaq).state) >= 351) {
+        return {"Extremely polluted"};
+      }
+      else {
+        return {"error"};
+      }
+
+switch:
+  - platform: template
+    name: "Display On/Off"
+    id: display_on_off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+
+  - platform: template
+    name: "Auto display brightness"
+    id: auto_brightness_on_off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+
+  - platform: template
+    name: "Auto nightlight"
+    id: auto_nightlight_enabled
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON 
+
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+    # Additional sensor configuration starts here
+
+  - platform: bh1750
+    name: "BH1750 Illuminance"
+    id: bh1750_brightness_1
+    address: 0x39
+    update_interval: 1s 
+
+  - platform: bme68x_bsec2
+    # ID of the bme680_bsec component to use for the next sensors.
+    # Useful when working with multiple devices
+    bme68x_bsec2_id: bme680_internal
+
+    temperature:
+      # Temperature in °C
+      name: "BME680 Temperature"
+      sample_rate: lp
+      filters:
+        - median
+    pressure:
+      # Pressure in hPa
+      name: "BME680 Pressure"
+      sample_rate: lp
+      filters:
+        - median
+    humidity:
+      # Relative humidity %
+      name: "BME680 Humidity"
+      sample_rate: lp
+      filters:
+        - median
+    gas_resistance:
+      # Gas resistance in Ω
+      name: "BME680 Gas Resistance"
+      filters:
+        - median
+    iaq:
+      # Indoor air quality value
+      name: "BME680 IAQ"
+      id: iaq
+      filters:
+        - median
+    iaq_accuracy:
+      # IAQ accuracy as a numeric value of 0, 1, 2, 3
+      name: "BME680 Numeric IAQ Accuracy"
+    co2_equivalent:
+      # CO2 equivalent estimate in ppm
+      name: "BME680 CO2 Equivalent"
+      filters:
+        - median
+    breath_voc_equivalent:
+      # Volatile organic compounds equivalent estimate in ppm
+      name: "BME680 Breath VOC Equivalent"
+      filters:
+        - median
+
+select:
+  - platform: template
+    name: "Rotation"
+    id: display_rotation_select
+    options:
+      - 0°
+      - 90°
+      - 180°
+      - 270°
+    initial_option: 0°
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+             format: "Chosen option: %s "
+             args: ["x.c_str()"]
+        - lambda: |-   
+            auto index = id(display_rotation_select).active_index();     
+            ESP_LOGI("main", "Option at index %d is active", index.value());  
+            if (index.value() == 0)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_0_DEGREES;
+              id(led_matrix_display).set_rotation(DISPLAY_ROTATION_0_DEGREES);
+              ESP_LOGD("lambda", "Set rotation to 0°");
+            } else if (index.value() == 1)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_90_DEGREES;
+              id(led_matrix_display).set_rotation(DISPLAY_ROTATION_90_DEGREES); 
+              ESP_LOGD("lambda", "Set rotation to 90°");             
+            } else if (index.value() == 2)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_180_DEGREES;
+              id(led_matrix_display).set_rotation(DISPLAY_ROTATION_180_DEGREES); 
+              ESP_LOGD("lambda", "Set rotation to 180°");             
+            } else if (index.value() == 3)
+            {
+              id(global_display_rotation) = DISPLAY_ROTATION_270_DEGREES;
+              id(led_matrix_display).set_rotation(DISPLAY_ROTATION_270_DEGREES);
+              ESP_LOGD("lambda", "Set rotation to 270°");           
+            }
+        - component.update: led_matrix_display
+
+globals:
+  - id: global_display_rotation
+    type: esphome::display::DisplayRotation
+    restore_value: yes
+    initial_value: 'DISPLAY_ROTATION_0_DEGREES'
+
+  - id: global_internal_display_brightness
+    type: float
+    restore_value: yes
+    initial_value: '1'
+
+  - id: min_absolute_brightness_display_value
+    type: float
+    restore_value: yes
+    initial_value: '0.11'   # this is a fixed value which needs to be adapted to your display/needs
+
+button:
+  - platform: restart
+    name: "Restart ESP"
+
+  - platform: template
+    name: "Rotate Screen"
+    id: button_rotate_screen
+    on_press:
+      then:
+      - select.next:
+          id: display_rotation_select
+          cycle: true
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Save auto brightness values
+    id: trigger_save_auto_brightness_values
+    on_press:
+      then:
+        - script.execute: 
+            id: perform_save_auto_brightness_values
+
+
+script:
+  - id: perform_save_auto_brightness_values
+    then:
+      - lambda: |-
+          // update current sensor reading
+          id(bh1750_brightness_1).update();
+
+          auto call = id(auto_max_brightness_sensor_value).make_call();
+          call.set_value(id(bh1750_brightness_1).state);
+          call.perform();
+          auto call2 = id(auto_max_brightness_display_value).make_call();
+          call2.set_value(id(display_brightness).state);
+          call2.perform();
+
+  - id: perform_auto_brightness_adjustment
+    then:
+      - lambda: |-
+          if (id(auto_brightness_on_off).state)
+          {
+            float new_brightness = id(auto_max_brightness_display_value).state * (id(bh1750_brightness_1).state / id(auto_max_brightness_sensor_value).state);
+            new_brightness = new_brightness > id(auto_max_brightness_display_value).state ? id(auto_max_brightness_display_value).state : new_brightness;
+            new_brightness = new_brightness < id(min_absolute_brightness_display_value) ? id(min_absolute_brightness_display_value) : new_brightness;
+            id(global_internal_display_brightness) = new_brightness;
+          } else
+          {
+            id(global_internal_display_brightness) = id(display_brightness).state;
+          }
+
+number:
+  - platform: template
+    name: Display Brightness
+    id: display_brightness
+    max_value: 1.0
+    min_value: 0.11
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+    icon: mdi:brightness-6
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Hour Color Red
+    id: hour_number_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: box
+    icon: mdi:palette-outline
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Hour Color Green
+    id: hour_number_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: box
+    icon: mdi:palette-outline
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Hour Color Blue
+    id: hour_number_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: box
+    icon: mdi:palette-outline
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Minute Color Red
+    id: minute_number_color_red_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: box
+    icon: mdi:palette-outline
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Minute Color Green
+    id: minute_number_color_green_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: box
+    icon: mdi:palette-outline
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Minute Color Blue
+    id: minute_number_color_blue_value
+    max_value: 255
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 255
+    mode: box
+    icon: mdi:palette-outline
+    set_action:
+      - component.update: led_matrix_display
+
+  - platform: template
+    name: Auto max brightness sensor value
+    id: auto_max_brightness_sensor_value
+    max_value: 65000
+    min_value: 0
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 300
+    mode: box
+    icon: mdi:brightness-6
+
+  - platform: template
+    name: Auto max brightness display value
+    id: auto_max_brightness_display_value
+    max_value: 1
+    min_value: 0
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+    mode: box
+    icon: mdi:brightness-6
+
+light:
+  - platform: neopixelbus
+    variant: WS2812
+    pin: ${gpio_led_strip}
+    num_leds: ${led_matrix_count}
+    type: GRB
+    name: "led_matrix"
+    id: led_matrix_light
+    default_transition_length: 0s
+    color_correct: [60%, 60%, 60%]
+    restore_mode: ALWAYS_ON
+    internal: true
+
+display:
+  - platform: addressable_light
+    id: led_matrix_display
+    addressable_light_id: led_matrix_light
+    width: ${led_matrix_width}
+    height: ${led_matrix_height}
+    rotation: 180°
+    update_interval: 16ms
+    pixel_mapper: |-
+      if (x % 2 == 0) {
+        return (x * 16) + y;
+      }
+      return (x * 16) + (15 - y);
+    lambda: |-
+          if (id(display_on_off).state) 
+          {
+            it.set_rotation(id(global_display_rotation));
+            Color red = Color(0xFF0000);
+            Color green = Color(0x00FF00);
+            Color blue = Color(0x0000FF);
+
+            auto hour_number_color = Color(id(global_internal_display_brightness)*id(hour_number_color_red_value).state, id(global_internal_display_brightness)*id(hour_number_color_green_value).state, id(global_internal_display_brightness)*id(hour_number_color_blue_value).state);
+            auto minute_number_color = Color(id(global_internal_display_brightness)*id(minute_number_color_red_value).state, id(global_internal_display_brightness)*id(minute_number_color_green_value).state, id(global_internal_display_brightness)*id(minute_number_color_blue_value).state);
+
+            if (id(auto_nightlight_enabled).state && (id(bh1750_brightness_1).state < 1.0))
+            {
+              hour_number_color = Color(28, 0, 0);
+              minute_number_color = Color(28, 0, 0);
+            }
+
+            it.strftime(1, -2, id(font_dotmatrix_1), hour_number_color, "%H", id(sntp_time).now());
+            it.strftime(6, 7, id(font_dotmatrix_1), minute_number_color, "%M", id(sntp_time).now());
+          } else 
+          {
+            it.fill(COLOR_OFF);
+          }
+    
