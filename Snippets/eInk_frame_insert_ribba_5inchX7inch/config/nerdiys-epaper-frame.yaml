@@ -1,0 +1,1169 @@
+#                                  _   _                 _  _               _
+#                                 | \ | |               | |(_)             | |
+#  __      ____      ____      __ |  \| |  ___  _ __  __| | _  _   _     __| |  ___
+#  \ \ /\ / /\ \ /\ / /\ \ /\ / / | . ` | / _ \| '__|/ _` || || | | |   / _` | / _ \
+#   \ V  V /  \ V  V /  \ V  V /_ | |\  ||  __/| |  | (_| || || |_| | _| (_| ||  __/
+#    \_/\_/    \_/\_/    \_/\_/(_)|_| \_| \___||_|   \__,_||_| \__, |(_)\__,_| \___|
+#                                                               __/ |
+#                                                              |___/
+#     Infos on https://www.Nerdiy.de/
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.#
+#     You can find additional infos about the licensing here: https://nerdiy.de/en/lizenz/
+#
+
+# Disclaimer: 
+# Huge thank you to Madalena from https://github.com/Madelena/esphome-weatherman-dashboard who made her code available. My code is (more or less heavily) extended but based on her work!
+# If you want to make the Hardware Implementation a bit easier you can find information here: 
+# https://nerdiy.de/produkt/eink-frame-insert-passend-fuer-ikea-ribba-5x7-bilderrahmen-3d-druckbar-stl-dateien/
+
+substitutions:
+  name: "nerdiys-ikea-epaper-frm"
+  friendly_name: "Nerdiys Ikea ePaper Frame"
+  add_mac_to_name: true
+
+  # security relevant definitions
+  # Info: In this code example most of the security relevant options are disabled or uncommented. Please check if you want to enable them.
+
+  #ap_password: "please_change_me"     # uncomment to activate user/password protection
+  #web_user: "NRDY"     # uncomment to activate user/password protection
+  #web_password: "please_change_me"     # uncomment to activate user/password protection
+  #ota_password: "please_change_me"     # uncomment to activate user/password protection
+  http_request_ssl_verification: "False"
+
+  # =========================================================================================
+  # GPIO pin and other definitions für use with "ePaper Driver Board" manufactured from Seeed
+  gpio_scl: "GPIO07"
+  gpio_sda: "GPIO06"
+  
+  gpio_deep_sleep_wake_up: "GPIO04"
+
+  gpio_spi_clk: "GPIO08"
+  gpio_spi_mosi: "GPIO10" 
+
+  gpio_display_cs: "GPIO03"
+  gpio_display_dc: "GPIO05"
+  gpio_display_reset: "GPIO02"
+
+  ePaper_display_type: "7.50in-bV3"
+  # =========================================================================================
+
+  # Other definitions
+  log_level: "DEBUG"
+  timezone: "Europe/Berlin"
+
+  # Position
+  latitude: 51.4818445°
+  longitude: 7.2162363°
+
+esphome:  
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: ${add_mac_to_name}
+
+  project:
+    name: nerdiy.ikea-epaper-frame
+    version: "1.0.0"
+
+  on_boot:
+      priority: -100.0
+      then:
+        - wait_until:
+            condition:
+              lambda: 'return id(data_updated) == true;'
+        # Wait a bit longer so all the data and settings are received
+        - delay: 5s
+        - logger.log: "Initial sensor data received: Refreshing display..."
+        - lambda: 'id(initial_data_received) = true;'
+
+        - script.execute: update_screen
+
+        - if:
+            condition:
+              binary_sensor.is_on: auto_deep_sleep_activated
+            then:
+              - logger.log: "Screen update skipped since refresh is not wanted. Starting deep sleep..."
+              - script.execute: start_deep_sleep
+        
+
+esp32:
+  board: seeed_xiao_esp32c3
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: "${log_level}"
+
+api:
+
+# Unfortunately there is not enough space on the ESP32-C3 available to use OTA
+#ota:
+#    - platform: esphome
+#      password: ${ota_password}     # uncomment to activate user/password protection
+
+http_request:
+  verify_ssl: "${http_request_ssl_verification}"
+
+dashboard_import:
+  package_import_url: 
+    github://Nerdiyde/ESPHomeSnippets/blob/main/Snippets/ikea_epaper_frame/nerdiys-epaper-frame.yaml@main
+  import_full_config: true
+
+wifi:      
+  ap:
+    #password: "${ap_password}"     # uncomment to activate user/password protection
+
+improv_serial:
+
+#esp32_improv:
+#  authorizer: none
+
+captive_portal:
+
+sun:
+  latitude: ${latitude}
+  longitude: ${longitude}
+
+interval:
+  - interval: 3min
+    startup_delay: 3min
+    then:
+      if:
+        condition:
+          not:
+            wifi.connected:
+        then:
+        #draw no wifi found message
+          - logger.log: "No WiFi found. :/ Updating screen and entering deep sleep..."
+          - logger.log: "Updating screen because no wifi found..."
+          - script.execute: update_screen_forced
+          - script.execute: start_deep_sleep
+
+  - interval: 4min
+    startup_delay: 4min
+    then:
+      # enter deep sleep if activated automatically
+      if:
+        condition:
+          binary_sensor.is_on: auto_deep_sleep_activated            
+        then:
+          - script.execute: start_deep_sleep
+        else:
+          - logger.log: "Auto deep sleep not active. Will stay awake..."
+  
+  - interval: 30min
+    startup_delay: 3min
+    then:
+      # refresh screen periodically
+      - logger.log: "Updating screen after boot."
+      - script.execute: update_screen
+
+
+deep_sleep:
+  id: deep_sleep_1
+  wakeup_pin:
+    number: ${gpio_deep_sleep_wake_up}
+    inverted: false
+    allow_other_uses: true
+    mode: 
+      input: true
+      pullup: true
+  wakeup_pin_mode: KEEP_AWAKE
+    
+web_server:
+  port: 80
+  version: 3
+  #auth:     # uncomment to activate user/password protection
+    #username: "${web_user}"     # uncomment to activate user/password protection
+    #password: "${web_password}"     # uncomment to activate user/password protection
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: ${timezone}
+    servers:
+     - 0.pool.ntp.org
+     - 1.pool.ntp.org
+     - 2.pool.ntp.org
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock via NTP"  
+
+  - platform: homeassistant
+    id: homeassistant_time
+    timezone: ${timezone}
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock via HomeAssistant" 
+
+debug:
+  update_interval: 5s
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: debug
+    device:
+      name: "Device Info"
+    reset_reason:
+      name: "Reset Reason"
+
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: Connected SSID
+    bssid:
+      name: Connected BSSID
+    mac_address:
+      name: Mac Wifi Address
+    scan_results:
+      name: Latest Scan Results
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_1_condition
+    id: weather_forecast_condition_1
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "missing" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_2_condition
+    id: weather_forecast_condition_2
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "missing" : x;
+
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_3_condition
+    id: weather_forecast_condition_3
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "missing" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_4_condition
+    id: weather_forecast_condition_4
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "missing" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_5_condition
+    id: weather_forecast_condition_5
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "missing" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_1_timestamp
+    id: weather_forecast_timestamp_1
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "99:99" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_2_timestamp
+    id: weather_forecast_timestamp_2
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "99:99" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_3_timestamp
+    id: weather_forecast_timestamp_3
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "99:99" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_4_timestamp
+    id: weather_forecast_timestamp_4
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "99:99" : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_5_timestamp
+    id: weather_forecast_timestamp_5
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return (x=="unavailable") ? "99:99" : x;
+
+  - platform: sun
+    id: weather_sunrise
+    type: sunrise
+    format: "%H:%M"
+
+  - platform: sun
+    id: weather_sunset
+    type: sunset
+    format: "%H:%M"
+
+  - platform: template
+    id: wind_cardinal_direction
+    name: "Wind cardinal direction"
+    lambda: |-
+      float heading = id(weather_wind_bearing_now).state;
+
+      std::string direction;
+
+      if (heading >= 337.5 || heading < 22.5) {
+        direction = "Nord";
+      } else if (heading >= 22.5 && heading < 67.5) {
+        direction = "Nord-Ost";
+      } else if (heading >= 67.5 && heading < 112.5) {
+        direction = "Ost";
+      } else if (heading >= 112.5 && heading < 157.5) {
+        direction = "Sued-Ost";
+      } else if (heading >= 157.5 && heading < 202.5) {
+        direction = "Sued";
+      } else if (heading >= 202.5 && heading < 247.5) {
+        direction = "Sued-West";
+      } else if (heading >= 247.5 && heading < 292.5) {
+        direction = "West";
+      } else if (heading >= 292.5 && heading < 337.5) {
+        direction = "Nord-West";
+      } else {
+        direction = "Unbekannt";
+      }
+
+      return direction;
+
+sensor:
+  - platform: debug
+    free:
+      name: "Heap Free"
+    block:
+      name: "Heap Max Block"
+    loop_time:
+      name: "Loop Time"
+    cpu_frequency:
+      name: "CPU Frequency"
+
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    id: wifi_signal_percent
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+
+  - platform: internal_temperature
+    name: "Internal Temperature"
+
+  - platform: template
+    name: "Display Last Update"
+    device_class: timestamp
+    entity_category: "diagnostic"
+    id: display_last_update
+    
+  - platform: template
+    name: "Display Refresh Count"
+    accuracy_decimals: 0
+    unit_of_measurement: "Refreshes"
+    state_class: "total_increasing"
+    entity_category: "diagnostic"
+    lambda: 'return id(recorded_display_refresh);'
+
+  - platform: homeassistant
+    entity_id: sensor.outside_temperature
+    id: weather_temperature_now
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.outside_humidity
+    id: weather_humidity_now
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.outside_air_pressure
+    id: weather_airpressure_now
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.openweathermap_wind_speed
+    id: weather_wind_speed_now
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.openweathermap_wind_bearing
+    id: weather_wind_bearing_now
+    on_value:
+      then:
+        - component.update: wind_cardinal_direction
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.openweathermap_rain
+    id: weather_precipitation_amount_now
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_1_temperature
+    id: weather_forecast_temperature_1
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_2_temperature
+    id: weather_forecast_temperature_2
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_3_temperature
+    id: weather_forecast_temperature_3
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_4_temperature
+    id: weather_forecast_temperature_4
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.weather_forecast_5_temperature
+    id: weather_forecast_temperature_5
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.openweathermap_uv_index
+    id: weather_uv_index_now
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.irrigationcontroller_tz_water_level_3
+    id: water_barrel_volume_percent
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.irrigationcontroller_tz_water_available_volume
+    id: water_barrel_volume_liter
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.cupra_born_state_of_charge
+    id: car_electrical_charge_level
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: homeassistant
+    entity_id: sensor.cupra_born_range_in_kilometers
+    id: car_electrical_range_in_km
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
+    filters:
+      - lambda: !lambda |-
+          return isnan(x) ? 999 : x;
+
+  - platform: max17043
+    id: max17043_id
+    i2c_id: i2c_main
+    battery_voltage:
+      name: "Battery Voltage"
+      id: "battery_voltage"
+      unit_of_measurement: "V"
+      state_class: "measurement"
+      device_class: "voltage"
+      accuracy_decimals: 3
+    battery_level:
+      name: "Battery percentage"
+      id: "battery_percentage"
+      unit_of_measurement: "%"
+      state_class: "measurement"
+      device_class: "battery"
+      accuracy_decimals: 0
+
+binary_sensor:
+
+  - platform: gpio
+    id: auto_sleep_activated_hw_switch
+    name: "Auto Sleep On/Off HW Switch"
+    pin:
+      allow_other_uses: true
+      number: ${gpio_deep_sleep_wake_up}
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+
+  - platform: template
+    name: "Auto deep sleep active"
+    id: "auto_deep_sleep_activated"
+    lambda: |-
+      return (id(auto_sleep_activated_sw_switch).state and id(auto_sleep_activated_hw_switch).state);
+    # If auto deep sleep changed update screen accordingly
+    on_state:
+      then:
+        # refresh screen only if needed
+        - if:
+            condition:
+              binary_sensor.is_on: auto_deep_sleep_activated
+            then: 
+              - logger.log: "Updating screen because auto deep sleep is enabled..."
+              - script.execute: update_screen
+              - script.execute: start_deep_sleep
+            else:
+              - logger.log: "Updating screen because auto deep sleep is disabled..."
+              - script.execute: update_screen
+
+switch:
+  - platform: template
+    name: "Auto Sleep On/Off SW Switch"
+    id: auto_sleep_activated_sw_switch
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_OFF 
+
+  - platform: template
+    name: "Auto screen refresh"
+    id: auto_screen_refresh
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON 
+
+  - platform: template
+    name: "Show frame alignment aid"
+    id: show_frame_alignment_aid_switch
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_OFF 
+    on_turn_on:
+      then:
+        - logger.log: "Updating screen to show aligment aid..."
+        - script.execute: update_screen_forced
+    on_turn_off:
+      then: 
+        - logger.log: "Updating screen to hide aligment aid..."
+        - script.execute: update_screen_forced
+
+number:
+  - platform: template
+    name: Sleep time
+    id: deep_sleep_duration_seconds
+    max_value: 86400
+    min_value: 30
+    step: 1
+    unit_of_measurement: "s"
+    optimistic: true
+    restore_value: true
+    initial_value: 1800
+    mode: box
+
+spi:
+  clk_pin: ${gpio_spi_clk} 
+  mosi_pin: ${gpio_spi_mosi}   
+
+i2c:
+  sda: ${gpio_sda} 
+  scl: ${gpio_scl} 
+  scan: true
+  id: i2c_main
+
+button:
+  - platform: shutdown
+    name: "Shutdown ESP"
+
+  - platform: restart
+    name: "Restart ESP"
+
+  - platform: template
+    name: "Refresh Screen"
+    on_press:
+      - logger.log: "Updating screen due to manual update request..."
+      - script.execute: update_screen_forced
+
+  - platform: template
+    name: "Start deep sleep"
+    on_press:
+      - script.execute: start_deep_sleep
+
+  - platform: template
+    name: "Next page"
+    on_press:
+      - display.page.show_next: epaper_display
+
+script:
+  - id: update_screen
+    then:
+        - if:
+            condition:
+              switch.is_on: auto_screen_refresh
+            then:
+              - script.execute: update_screen_forced
+            else:
+              - logger.log: "Screen update skipped since auto refresh is disabled."
+
+  - id: update_screen_forced
+    then:
+      - logger.log: "Updating screen started..."
+      - component.update: epaper_display
+      - lambda: 'id(recorded_display_refresh) += 1;'
+      - lambda: 'id(display_last_update).publish_state(id(homeassistant_time).now().timestamp);'
+      - logger.log: "...screen update finished."
+
+  - id: start_deep_sleep
+    then:
+      - logger.log: "Starting deep sleep in 20 seconds..."
+      - delay: 20s
+      - max17043.sleep_mode: max17043_id
+      - lambda: |-
+          id(deep_sleep_1).set_sleep_duration(id(deep_sleep_duration_seconds).state*1000);
+      - deep_sleep.enter:
+          id: deep_sleep_1
+
+globals:
+  - id: data_updated
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: initial_data_received
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: recorded_display_refresh
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+font:
+  - file: 'fonts/GothamRnd-Book.ttf'
+    id: font_small_book
+    size: 18
+
+  - file: 'fonts/GothamRnd-Bold.ttf'
+    id: font_large_bold
+    size: 90
+    glyphs: [' ', '-', '°', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'C']
+
+  - file: 'fonts/GothamRnd-Bold.ttf'
+    id: font_title
+    size: 54
+    glyphs: ['W', 'E', 'A', 'T', 'H', 'R', 'L', 'I', 'N', ' ']
+
+  - file: 'fonts/GothamRnd-Bold.ttf'
+    id: font_small_bold
+    size: 18
+    glyphs: [' ', '-', '°', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', 'M', 'I', 'N']
+
+
+  # Include Material Design Icons font
+  # Thanks to https://community.home-assistant.io/t/display-materialdesign-icons-on-esphome-attached-to-screen/199790/16
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: font_mdi_large
+    size: 96
+    glyphs: &mdi-weather-glyphs
+      - "\U000F0590" # mdi-weather-cloudy
+      - "\U000F0F2F" # mdi-weather-cloudy-alert
+      - "\U000F0E6E" # mdi-weather-cloudy-arrow-right
+      - "\U000F0591" # mdi-weather-fog
+      - "\U000F0592" # mdi-weather-hail
+      - "\U000F0F30" # mdi-weather-hazy
+      - "\U000F0898" # mdi-weather-hurricane
+      - "\U000F0593" # mdi-weather-lightning
+      - "\U000F067E" # mdi-weather-lightning-rainy
+      - "\U000F0594" # mdi-weather-night
+      - "\U000F0F31" # mdi-weather-night-partly-cloudy
+      - "\U000F0595" # mdi-weather-partly-cloudy
+      - "\U000F0F32" # mdi-weather-partly-lightning
+      - "\U000F0F33" # mdi-weather-partly-rainy
+      - "\U000F0F34" # mdi-weather-partly-snowy
+      - "\U000F0F35" # mdi-weather-partly-snowy-rainy
+      - "\U000F0596" # mdi-weather-pouring
+      - "\U000F0597" # mdi-weather-rainy
+      - "\U000F0598" # mdi-weather-snowy
+      - "\U000F0F36" # mdi-weather-snowy-heavy
+      - "\U000F067F" # mdi-weather-snowy-rainy
+      - "\U000F0599" # mdi-weather-sunny
+      - "\U000F0F37" # mdi-weather-sunny-alert
+      - "\U000F14E4" # mdi-weather-sunny-off
+      - "\U000F059A" # mdi-weather-sunset
+      - "\U000F059B" # mdi-weather-sunset-down
+      - "\U000F059C" # mdi-weather-sunset-up
+      - "\U000F0F38" # mdi-weather-tornado
+      - "\U000F059D" # mdi-weather-windy
+      - "\U000F059E" # mdi-weather-windy-variant
+      - "\U000F17FF" # mdi-sun-wireless-outline
+      - "\U000F018C" # mdi-compass-outline
+      - "\U000F0028" # mdi-alert-circle
+      - "\U000F1482" # mdi-barrel-outline
+      - "\U000F0B6C" # mdi-car-electric
+      
+
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: font_mdi_medium
+    size: 36
+    glyphs: *mdi-weather-glyphs
+
+  # Preview https://pictogrammers.github.io/@mdi/font/6.5.95/
+  # Download: https://cdnjs.com/libraries/MaterialDesign-Webfont/6.5.95
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: font_wifi_bat
+    size: 20
+    glyphs: [
+
+      # Wifi
+      '󰤮', # F092E mdi-wifi-strength-off-outline
+      '󰤯', # F092F mdi-wifi-strength-outline
+      '󰤟', # F091F mdi-wifi-strength-1
+      '󰤢', # F0922 mdi-wifi-strength-2
+      '󰤥', # F0925 mdi-wifi-strength-3
+      '󰤨', # F0928 mdi-wifi-strength-4
+      
+      # Battery
+      '󰁺', # F007A mdi-battery-10
+      '󰁻', # F007B mdi-battery-20
+      '󰁼', # F007C mdi-battery-30
+      '󰁽', # F007D mdi-battery-40
+      '󰁾', # F007E mdi-battery-50
+      '󰁿', # F007F mdi-battery-60
+      '󰂀', # F0080 mdi-battery-70
+      '󰂁', # F0081 mdi-battery-80
+      '󰂂', # F0082 mdi-battery-90
+      '󰁹', # F0079 mdi-battery 100
+      ]
+
+color:
+  - id: color_black
+    red: 0%
+    green: 0%
+    blue: 0%
+    white: 0%
+  - id: color_white
+    red: 0%
+    green: 0%
+    blue: 0%
+    white: 100%
+
+graph:
+  - id: air_pressure_graph
+    sensor: weather_temperature_now
+    duration: 12h
+    width: 330
+    height: 70
+
+display:
+  - platform: waveshare_epaper
+    id: epaper_display
+    cs_pin: ${gpio_display_cs}
+    dc_pin: ${gpio_display_dc}
+    reset_pin: ${gpio_display_reset}
+    reset_duration: 2ms
+    model: ${ePaper_display_type}
+    update_interval: never
+    rotation: 270°
+    pages:
+      - id: weather_and_more
+        lambda: |-
+            // Map weather states to MDI characters.
+            std::map<std::string, std::string> weather_icon_map
+              {
+                {"cloudy", "\U000F0590"},
+                {"cloudy-alert", "\U000F0F2F"},
+                {"cloudy-arrow-right", "\U000F0E6E"},
+                {"fog", "\U000F0591"},
+                {"hail", "\U000F0592"},
+                {"hazy", "\U000F0F30"},
+                {"hurricane", "\U000F0898"},
+                {"lightning", "\U000F0593"},
+                {"lightning-rainy", "\U000F067E"},
+                {"night", "\U000F0594"},
+                {"night-partly-cloudy", "\U000F0F31"},
+                {"clear-night", "\U000F0594"},
+                {"partlycloudy", "\U000F0595"},
+                {"partly-lightning", "\U000F0F32"},
+                {"partly-rainy", "\U000F0F33"},
+                {"partly-snowy", "\U000F0F34"},
+                {"partly-snowy-rainy", "\U000F0F35"},
+                {"pouring", "\U000F0596"},
+                {"rainy", "\U000F0597"},
+                {"snowy", "\U000F0598"},
+                {"snowy-heavy", "\U000F0F36"},
+                {"snowy-rainy", "\U000F067F"},
+                {"sunny", "\U000F0599"},
+                {"sunny-alert", "\U000F0F37"},
+                {"sunny-off", "\U000F14E4"},
+                {"sunset", "\U000F059A"},
+                {"sunset-down", "\U000F059B"},
+                {"sunset-up", "\U000F059C"},
+                {"tornado", "\U000F0F38"},
+                {"windy", "\U000F059D"},
+                {"windy-variant", "\U000F059E"},
+                {"missing", "\U000F0028"},
+              };
+
+            // "clear" screen
+
+            int wifi_icon_x = 440;
+            int wifi_icon_y = 710;
+
+            int battery_icon_x = 40;
+            int battery_icon_y = 710;
+
+            if (id(initial_data_received) == false) 
+            {
+
+              it.fill(color_white);
+
+              if (id(show_frame_alignment_aid_switch).state)
+              {
+                it.rectangle(25, 60, 435, 675, color_black);          
+              }
+
+              it.printf(240, 390, id(font_small_bold), color_black, TextAlign::TOP_CENTER, "WARTE AUF DATEN...");
+
+              if (!id(auto_deep_sleep_activated).state)
+              {
+                it.printf(240, 690, id(font_small_book), color_black, TextAlign::TOP_CENTER, "Auto Sleep Mode deaktiviert.");
+              }
+
+              char str_time[17];
+              char str_date[17];
+              time_t currTime = id(homeassistant_time).now().timestamp;
+              strftime(str_time, sizeof(str_time), "%H:%M", localtime(&currTime));
+              strftime(str_date, sizeof(str_date), "%d.%m.%Y", localtime(&currTime));
+
+              it.printf(240, 710, id(font_small_book), color_black, TextAlign::TOP_CENTER, "Status von %s Uhr am %s", str_time, str_date);
+
+              if(id(wifi_signal_percent).has_state()) 
+              {
+                if (id(wifi_signal_percent).state >= -50) {
+                    //Excellent
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰤨");
+                    ESP_LOGI("WiFi", "Exellent");
+                } else if (id(wifi_signal_percent).state  >= 90) {
+                    //Good
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰤥");
+                    ESP_LOGI("WiFi", "Good");
+                } else if (id(wifi_signal_percent).state  >= 50) {
+                    //Fair
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰤢");
+                    ESP_LOGI("WiFi", "Fair");
+                } else if (id(wifi_signal_percent).state  >= 30) {
+                    //Weak
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰤟");
+                    ESP_LOGI("WiFi", "Weak");
+                } else {
+                    //Unlikely working signal
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰤯");
+                    ESP_LOGI("WiFi", "Unlikely");
+                }
+              } else
+              {
+                //no signal (yet)
+                it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰤮");
+                ESP_LOGI("WiFi", "No signal");          
+              }
+              
+              if(id(battery_percentage).has_state()) 
+              {
+                if (id(battery_percentage).state >= 95) 
+                {
+                    // 100 %
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁹");
+                } else if (id(battery_percentage).state  >= 90) {
+                    // 90 %
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰂂");
+                } else if (id(battery_percentage).state  >= 80) {
+                    // 80%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰂁");
+                } else if (id(battery_percentage).state  >= 70) {
+                    // 70%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰂀");
+                } else if (id(battery_percentage).state  >= 60) {
+                    // 60%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁿");
+                } else if (id(battery_percentage).state  >= 50) {
+                    // 50%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁾");
+                } else if (id(battery_percentage).state  >= 40) {
+                    // 40%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁽");
+                } else if (id(battery_percentage).state  >= 30) {
+                    // 30%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁼");
+                } else if (id(battery_percentage).state  >= 20) {
+                    // 20%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁻");
+                } else {
+                    // 10%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_black, TextAlign::TOP_CENTER, "󰁺");
+                }
+              }  
+            } else 
+            {
+
+              it.fill(color_black);
+              
+              if (id(show_frame_alignment_aid_switch).state)
+              {
+                it.rectangle(25, 60, 435, 675, color_white);        
+              }
+
+              // Weather Section
+              it.printf(240, 84, id(font_title), color_white, TextAlign::TOP_CENTER, "WETTER");
+              it.printf(120, 160, id(font_mdi_large), color_white, TextAlign::TOP_CENTER, "%s", weather_icon_map["cloudy"].c_str());
+              it.printf(200, 150, id(font_large_bold), color_white, TextAlign::TOP_LEFT, "%2.0f°C", id(weather_temperature_now).state);
+              it.printf(220, 235, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%2.0f %%", id(weather_humidity_now).state);
+              it.printf(320, 235, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%2.0f hPa", id(weather_airpressure_now).state);
+
+              it.filled_rectangle(70, 270, 350, 3);
+
+              it.printf(85, 292, id(font_small_book), color_white, TextAlign::TOP_CENTER, "%s", id(weather_forecast_timestamp_1).state.c_str());
+              it.printf(85, 316, id(font_mdi_medium), color_white, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_forecast_condition_1).state.c_str()].c_str());
+              it.printf(85, 364, id(font_small_bold), color_white, TextAlign::TOP_CENTER, "%2.0f°C", id(weather_forecast_temperature_1).state);
+
+              it.printf(165, 292, id(font_small_book), color_white, TextAlign::TOP_CENTER, "%s", id(weather_forecast_timestamp_2).state.c_str());
+              it.printf(165, 316, id(font_mdi_medium), color_white, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_forecast_condition_2).state.c_str()].c_str());
+              it.printf(165, 364, id(font_small_bold), color_white, TextAlign::TOP_CENTER, "%2.0f°C", id(weather_forecast_temperature_2).state);
+
+              it.printf(245, 292, id(font_small_book), color_white, TextAlign::TOP_CENTER, "%s", id(weather_forecast_timestamp_3).state.c_str());
+              it.printf(245, 316, id(font_mdi_medium), color_white, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_forecast_condition_3).state.c_str()].c_str());
+              it.printf(245, 364, id(font_small_bold), color_white, TextAlign::TOP_CENTER, "%2.0f°C", id(weather_forecast_temperature_3).state);
+
+              it.printf(325, 292, id(font_small_book), color_white, TextAlign::TOP_CENTER, "%s", id(weather_forecast_timestamp_4).state.c_str());
+              it.printf(325, 316, id(font_mdi_medium), color_white, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_forecast_condition_4).state.c_str()].c_str());
+              it.printf(325, 364, id(font_small_bold), color_white, TextAlign::TOP_CENTER, "%2.0f°C", id(weather_forecast_temperature_4).state);
+
+              it.printf(405, 292, id(font_small_book), color_white, TextAlign::TOP_CENTER, "%s", id(weather_forecast_timestamp_5).state.c_str());
+              it.printf(405, 316, id(font_mdi_medium), color_white, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_forecast_condition_5).state.c_str()].c_str());
+              it.printf(405, 364, id(font_small_bold), color_white, TextAlign::TOP_CENTER, "%2.0f°C", id(weather_forecast_temperature_5).state);
+
+              it.filled_rectangle(70, 400, 350, 3);
+
+              it.printf(92, 420, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F059C");
+              it.printf(135, 430, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%s", id(weather_sunrise).state.c_str());
+
+              it.printf(282, 420, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F059B");
+              it.printf(325, 430, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%s", id(weather_sunset).state.c_str());
+
+              it.printf(92, 460, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F059D");
+              it.printf(135, 470, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%.1f m/s", id(weather_wind_speed_now).state);
+
+              it.printf(282, 460, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F018C");
+              it.printf(325, 470, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%s", id(wind_cardinal_direction).state.c_str());
+
+              it.printf(92, 500, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F0596");
+              it.printf(135, 510, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%.2f mm", id(weather_precipitation_amount_now).state);
+
+              it.printf(282, 500, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F17FF");
+              it.printf(325, 510, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%2.1f", id(weather_uv_index_now).state);
+
+              it.printf(92, 540, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F1482");
+              it.printf(135, 550, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%3.0f%% / %2.1fL ", id(water_barrel_volume_percent).state, id(water_barrel_volume_liter).state);
+
+              it.printf(282, 540, id(font_mdi_medium), color_white, TextAlign::TOP_LEFT, "%s", "\U000F0B6C");
+              it.printf(320, 550, id(font_small_book), color_white, TextAlign::TOP_LEFT, "%3.0f%% / %2.0fkm ", id(car_electrical_charge_level).state, id(car_electrical_range_in_km).state);
+
+              //it.filled_rectangle(70, 550, 350, 3);
+
+              // the following makes only sense when the device is not used in battery mode since the historical values are lost at device reboot
+              //it.graph(80, 570, id(air_pressure_graph));
+
+              
+              if (id(battery_percentage).has_state() && id(battery_percentage).state <= 15) 
+              {
+                it.printf(240, 690, id(font_small_book), color_white, TextAlign::TOP_CENTER, "Akkukapazitaet: %1.0f%%", id(battery_percentage).state);
+              } else if (!id(auto_deep_sleep_activated).state)
+              {
+                it.printf(240, 690, id(font_small_book), color_white, TextAlign::TOP_CENTER, "Auto Sleep Mode deaktiviert.");
+              }
+              
+
+              // Refresh Timestamp
+              // Code by EnsconcE from https://community.home-assistant.io/t/esphome-show-time/348903
+              char str_time[17];
+              char str_date[17];
+              time_t currTime = id(homeassistant_time).now().timestamp;
+              strftime(str_time, sizeof(str_time), "%H:%M", localtime(&currTime));
+              strftime(str_date, sizeof(str_date), "%d.%m.%Y", localtime(&currTime));
+              it.printf(240, 710, id(font_small_book), color_white, TextAlign::TOP_CENTER, "Status von %s Uhr am %s", str_time, str_date);
+
+              if(id(wifi_signal_percent).has_state()) 
+              {
+                if (id(wifi_signal_percent).state >= -50) {
+                    //Excellent
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰤨");
+                    ESP_LOGI("WiFi", "Exellent");
+                } else if (id(wifi_signal_percent).state  >= 90) {
+                    //Good
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰤥");
+                    ESP_LOGI("WiFi", "Good");
+                } else if (id(wifi_signal_percent).state  >= 50) {
+                    //Fair
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰤢");
+                    ESP_LOGI("WiFi", "Fair");
+                } else if (id(wifi_signal_percent).state  >= 30) {
+                    //Weak
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰤟");
+                    ESP_LOGI("WiFi", "Weak");
+                } else {
+                    //Unlikely working signal
+                    it.print(wifi_icon_x, wifi_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰤯");
+                    ESP_LOGI("WiFi", "Unlikely");
+                }
+              } else
+              {
+                //no signal (yet)
+                it.print(wifi_icon_x, wifi_icon_y, id(font_small_book), color_white, TextAlign::TOP_CENTER, "󰤮");
+                ESP_LOGI("WiFi", "No signal");          
+              }
+              
+              if(id(battery_percentage).has_state()) 
+              {
+                if (id(battery_percentage).state >= 95) 
+                {
+                    // 100 %
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁹");
+                } else if (id(battery_percentage).state  >= 90) {
+                    // 90 %
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰂂");
+                } else if (id(battery_percentage).state  >= 80) {
+                    // 80%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰂁");
+                } else if (id(battery_percentage).state  >= 70) {
+                    // 70%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰂀");
+                } else if (id(battery_percentage).state  >= 60) {
+                    // 60%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁿");
+                } else if (id(battery_percentage).state  >= 50) {
+                    // 50%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁾");
+                } else if (id(battery_percentage).state  >= 40) {
+                    // 40%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁽");
+                } else if (id(battery_percentage).state  >= 30) {
+                    // 30%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁼");
+                } else if (id(battery_percentage).state  >= 20) {
+                    // 20%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁻");
+                } else {
+                    // 10%
+                    it.print(battery_icon_x, battery_icon_y, id(font_wifi_bat), color_white, TextAlign::TOP_CENTER, "󰁺");
+                }
+              }
+            }
