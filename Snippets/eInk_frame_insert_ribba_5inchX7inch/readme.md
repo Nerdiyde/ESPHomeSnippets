@@ -37,18 +37,18 @@ The RIBBA frame uses the FPC2Dupont breakout board which is wired seperately to 
 ### RÖDALM frame insert
 The RÖDALM frame uses the "ePaper Driver Board" made by Seeed. A material list is available [here](https://nerdiy.de/en/product-2/ikea-roedalm-eink-rahmeneinsatz-fuer-13x18cm-5x7-bilderrahmen-3d-druckbar-stl-dateien/)
 
-![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/1.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/2.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/3.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/4.png)
-![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/5.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/1.jpg)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/2.jpg)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/3.jpg)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/4.jpg)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/roedalm_insert/5.jpg)
 
 ## Available designs
 The following designs are intigrated in the example configuration.
 
 ### Simple Weather Display
 
-![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/designs/1.png)
+![](https://github.com/Nerdiyde/ESPHomeSnippets/blob/main/Snippets/eInk_frame_insert_ribba_5inchX7inch/images/designs/1.jpg)
 
 ## Trademarks
 
