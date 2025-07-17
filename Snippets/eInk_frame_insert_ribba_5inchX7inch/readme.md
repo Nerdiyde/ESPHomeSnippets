@@ -1,16 +1,17 @@
 
 
-# eInk Frame Insert suitable for Ikea Ribba 5″x7″ picture frame
+# ePaper frame insert for Ikea RIBBA/RÖDALM 13x18cm / 5″x7″ picture frame
 
 The more you get into the topic of SmartHome, the more you ask yourself how you can bring all this data into your normal life in the most convenient and attractive way possible.
 
-One solution to this problem is my MagicMirror project. I have another one thanks to Madalena (https://github.com/Madelena) when I came across your GitHub repo a few months ago (https://github.com/Madelena/esphome-weatherman-dashboard). 
+One solution to this problem is my [MagicMirror](https://nerdiy.de/en/howto-magicmirror-build-your-own-magicmirror/) project. But now I have another one thanks to [Madalena](https://github.com/Madelena) when I came across her [GitHub repo](https://github.com/Madelena/esphome-weatherman-dashboard) a few months ago . 
 
-After expanding the project a bit, I came up with the E-Ink frame insert shown below, which can be used to build a battery-powered E-Ink display that receives the data from a Home Assistant instance.
+After expanding the project a bit, I came up with the ePaper frame insert shown below, which can be used to build a battery-powered ePaper display that receives the data from a Home Assistant instance.
+To simplify the hardware setup a bit, I created a 3D printable insert with which the ePaper display and the complete electronics can be installed precisely in the Ikea RIBBA/RÖDALM 13x18cm / 5″x7″ frame used.
 
-To simplify the hardware setup a bit, I created a 3D printable insert with which the E-Ink display and the complete electronics can be installed precisely in the Ikea Ribba 5″x7″ frame used.
+## STL files for the frame insert
 
-The STL files are available 
+There are two sets of frame insert parts available:
  - [Ikea RIBBA 13x18cm / 5"x7" Frame insert](https://nerdiy.de/en/product-2/eink-frame-insert-suitable-for-ikea-ribba-5x7-picture-frame-3d-printable-stl-files/)
  - [Ikea RÖDALM 13x18cm / 5"x7" Frame insert](https://nerdiy.de/en/product-2/ikea-roedalm-eink-rahmeneinsatz-fuer-13x18cm-5x7-bilderrahmen-3d-druckbar-stl-dateien/)
 
