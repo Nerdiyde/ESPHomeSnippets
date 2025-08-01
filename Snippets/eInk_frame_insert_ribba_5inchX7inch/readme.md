@@ -18,11 +18,12 @@ There are two sets of frame insert parts available:
 ## Configuration
 If you like, use the available example configuration in the "config" folder.
 
-Before you flash it to your frame check the following:
-- make sure that the correct GPIOs are set at the top of the configuration
-- make sure that the correct display type is set
-- make sure the correct timezone is set
-- check if you want to uncomment/activate any security features (e.g. passwords, API-keys, etc.)
+> [!IMPORTANT]
+> Before you flash it to your frame check the following:
+> - make sure that the correct GPIOs are set at the top of the configuration
+> - make sure that the correct display type is set
+> - make sure the correct timezone is set
+> - check if you want to uncomment/activate any security features (e.g. passwords, API-keys, etc.)
 
 ## Pictures
 
